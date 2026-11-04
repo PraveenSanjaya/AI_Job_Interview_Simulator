@@ -2,7 +2,7 @@
 
 import secrets
 from functools import lru_cache
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -72,6 +72,17 @@ class Settings(BaseSettings):
     # startup; individual match requests may override them again.
     match_weights: dict[str, float] | None = None
 
+    # Mock interviews. Follow-ups per main question are capped; a running interview that is
+    # idle for ``interview_idle_minutes`` becomes "interrupted" (resumable) and an unstarted one
+    # expires after ``interview_created_expiry_hours``. ``interview_scoring`` optionally
+    # overrides the default scoring rules (JSON), validated at startup.
+    interview_default_followups: int = Field(default=2, ge=0, le=5)
+    interview_max_followups: int = Field(default=3, ge=0, le=5)
+    interview_max_questions: int = Field(default=30, ge=1, le=100)
+    interview_idle_minutes: int = Field(default=120, ge=1, le=10_080)
+    interview_created_expiry_hours: int = Field(default=72, ge=1, le=8_760)
+    interview_scoring: dict[str, Any] | None = None
+
     # Document storage. "local" writes under local_storage_path (must not be served by a
     # web server); "s3" is reserved for a later phase and rejected at startup.
     storage_backend: Literal["local", "s3"] = "local"
@@ -80,6 +91,15 @@ class Settings(BaseSettings):
 
     frontend_url: str = "http://localhost:5173"
     backend_url: str = "http://localhost:8000"
+
+    @field_validator("interview_scoring", mode="after")
+    @classmethod
+    def _valid_interview_scoring(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        if value is not None:
+            from app.interview.config import resolve_scoring
+
+            resolve_scoring(value, None)  # raises a clear error for invalid rules
+        return value
 
     @field_validator("match_weights", mode="after")
     @classmethod

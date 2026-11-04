@@ -151,3 +151,13 @@ class InterviewRepository:
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    async def recent_question_texts(self, user_id: uuid.UUID, limit: int) -> list[str]:
+        """Main questions the user was most recently asked (to avoid repeating them)."""
+        result = await self._session.execute(
+            select(InterviewQuestion.text)
+            .where(InterviewQuestion.user_id == user_id, InterviewQuestion.asked_at.is_not(None))
+            .order_by(InterviewQuestion.asked_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars())
