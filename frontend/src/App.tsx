@@ -4,6 +4,7 @@ import { GuestOnly, RequireAuth } from '@/auth/RequireAuth';
 import { AppShell } from '@/components/layout/AppShell';
 import { EmptyState, PageHeader } from '@/components/ui';
 import { LoginPage, RegisterPage } from '@/pages/AuthPages';
+import { ProfilePage } from '@/pages/ProfilePage';
 
 function NotFound() {
   return (
@@ -34,6 +35,7 @@ export function App() {
       <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
           <Route index element={<Home />} />
+          <Route path="profile" element={<ProfilePage />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>
