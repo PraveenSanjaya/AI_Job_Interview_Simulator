@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from app.ai.base import LLMProvider
 from app.ai.cv_schemas import CVAnalysisResult
 from app.ai.suggestions import build_profile_suggestion
-from app.api.deps import CurrentUserDep, RateLimiterDep, SessionDep, SettingsDep
+from app.api.deps import CurrentUserDep, RateLimiterDep, SessionDep, SettingsDep, get_llm_provider
 from app.models import ResumeAnalysis
 from app.schemas.profile import ApplyResult, ApplyToProfileRequest
 from app.schemas.resume import AnalysisResponse, AnalyzeRequest, ResumeResponse
@@ -34,11 +34,6 @@ def get_resume_service(
 
 
 ResumeServiceDep = Annotated[ResumeService, Depends(get_resume_service)]
-
-
-def get_llm_provider(request: Request) -> LLMProvider:
-    provider: LLMProvider = request.app.state.llm_provider
-    return provider
 
 
 def get_analysis_service(

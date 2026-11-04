@@ -7,6 +7,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.base import LLMProvider
 from app.core.config import Settings, get_settings
 from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.core.rate_limit import RateLimiter
@@ -27,6 +28,11 @@ def get_rate_limiter(request: Request) -> RateLimiter:
 
 
 RateLimiterDep = Annotated[RateLimiter, Depends(get_rate_limiter)]
+
+
+def get_llm_provider(request: Request) -> LLMProvider:
+    provider: LLMProvider = request.app.state.llm_provider
+    return provider
 
 
 def client_ip(request: Request) -> str:

@@ -13,6 +13,7 @@ from typing import Any
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from app.ai.cv_schemas import CVAnalysisResult
+from app.ai.integration_schemas import IntegrationAnalysisResult
 from app.models.enums import SkillCategory
 from app.schemas.profile import (
     ApplyToProfileRequest,
@@ -155,4 +156,64 @@ def build_profile_suggestion(
         return ApplyToProfileRequest.model_validate(suggestion_data), notes
     except ValidationError:
         notes.append("The extracted data could not be turned into a profile suggestion")
+        return None, notes
+
+
+def build_integration_suggestion(
+    result: IntegrationAnalysisResult,
+) -> tuple[ApplyToProfileRequest | None, list[str]]:
+    """Suggest projects and skills from a source analysis, for the user to review.
+
+    Projects are the candidate's own repositories exactly as GitHub describes them
+    (observed facts). Skills are languages those repositories are labelled with plus
+    skills the analysis could verify in the sources' descriptive text.
+    """
+    notes: list[str] = []
+    projects: list[ProjectIn] = []
+    skills: dict[str, SkillIn] = {}
+
+    github = result.facts.github
+    if github is not None:
+        for repo in github.notable_repositories:
+            if not repo.description:
+                continue
+            technologies = [t for t in [repo.primary_language, *repo.topics] if t]
+            built = _build(
+                ProjectIn,
+                {
+                    "name": repo.name,
+                    "description": repo.description,
+                    "technologies": technologies[:30],
+                    "url": repo.url,
+                },
+                notes,
+                "project",
+            )
+            if built:
+                projects.append(built)
+        for language in github.language_distribution:
+            skills.setdefault(
+                language.casefold(), SkillIn(name=language, category=SkillCategory.TECHNICAL)
+            )
+
+    for skill in result.assessment.demonstrated_skills:
+        if skill.name:
+            skills.setdefault(
+                skill.name.casefold(), SkillIn(name=skill.name, category=SkillCategory.TECHNICAL)
+            )
+
+    if not projects and not skills:
+        return None, notes
+    try:
+        return (
+            ApplyToProfileRequest.model_validate(
+                {
+                    "projects": [p.model_dump() for p in projects] or None,
+                    "skills": [s.model_dump() for s in skills.values()] or None,
+                }
+            ),
+            notes,
+        )
+    except ValidationError:
+        notes.append("The analysis could not be turned into a profile suggestion")
         return None, notes
