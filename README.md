@@ -6,9 +6,9 @@ See [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md), [docs/ARCHITECTURE.md](docs/AR
 
 ## Status
 
-Implemented: backend foundation (Phase 1), database, authentication and candidate profiles (Phase 2), and resume upload, text extraction and AI CV analysis with user-approved profile updates (Phase 3). Not implemented yet: frontend, GitHub/portfolio analysis, AI interviews, RAG/memory, voice, OCR, S3 storage, Redis integration and email delivery (password reset, email verification).
+Implemented: backend foundation (Phase 1), database, authentication and candidate profiles (Phase 2), resume upload, text extraction and AI CV analysis with user-approved profile updates (Phase 3), and GitHub profile and portfolio-website analysis with SSRF-hardened fetching (Phase 4). Not implemented yet: frontend, AI interviews, RAG/memory, voice, OCR, S3 storage, Redis integration and email delivery (password reset, email verification).
 
-See [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md), [docs/DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md), [docs/RESUME_PROCESSING.md](docs/RESUME_PROCESSING.md) (security, privacy, retention) and [docs/TESTING.md](docs/TESTING.md).
+See [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md), [docs/DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md), [docs/RESUME_PROCESSING.md](docs/RESUME_PROCESSING.md) and [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) (security, privacy, retention) and [docs/TESTING.md](docs/TESTING.md).
 
 ## Backend setup
 
@@ -72,7 +72,11 @@ Settings are read from environment variables or a `.env` file (see `.env.example
 | `AI_PROVIDER` | `none` | `none` or `openai`. AI is optional; everything except analysis works without it |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | unset | Both required when `AI_PROVIDER=openai`. No default model is assumed |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint. `localhost` endpoints are treated as local (no consent prompt) |
-| `AI_TIMEOUT_SECONDS`, `AI_MAX_INPUT_CHARS` | `60`, `30000` | Provider timeout and maximum resume characters sent |
+| `AI_TIMEOUT_SECONDS`, `AI_MAX_INPUT_CHARS` | `60`, `30000` | Provider timeout and maximum characters sent |
+| `GITHUB_TOKEN` | unset | Optional. Only raises GitHub's API rate limit for public reads; never needed |
+| `GITHUB_MAX_REPOS`, `GITHUB_README_REPOS` | `100`, `5` | Repositories read and READMEs fetched per connection |
+| `INTEGRATION_TIMEOUT_SECONDS`, `INTEGRATION_MAX_RESPONSE_BYTES` | `10`, `1000000` | Per-request timeout and decompressed size cap for GitHub and portfolio fetches |
+| `PORTFOLIO_MAX_PAGES` | `5` | Pages fetched per portfolio (the supplied page plus same-host pages) |
 
 Generate a secret with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 
@@ -99,6 +103,7 @@ backend/
     ai/            # LLM provider abstraction, CV analysis, grounding, suggestions
     db/            # engine, session dependency, column types
     documents/     # upload validation and PDF/DOCX/TXT text extraction
+    integrations/  # GitHub client/snapshot, SSRF-safe portfolio fetcher and crawler
     models/        # SQLAlchemy models
     repositories/  # database access
     schemas/       # Pydantic request/response models
