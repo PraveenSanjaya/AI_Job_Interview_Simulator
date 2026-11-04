@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.core.config import Settings, get_settings
 from app.schemas.health import LivenessResponse, ReadinessResponse
@@ -19,10 +19,12 @@ async def live() -> LivenessResponse:
 
 @router.get("/ready", response_model=ReadinessResponse)
 async def ready(
-    response: Response, settings: Annotated[Settings, Depends(get_settings)]
+    request: Request,
+    response: Response,
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> ReadinessResponse:
     """Dependencies required to serve traffic are available."""
-    result = run_readiness_checks(settings)
+    result = await run_readiness_checks(settings, request.app.state.engine)
     if result.status == "not_ready":
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return result

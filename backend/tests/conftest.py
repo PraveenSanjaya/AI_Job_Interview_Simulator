@@ -3,10 +3,13 @@ from collections.abc import AsyncIterator
 import httpx
 import pytest
 from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.core.exceptions import NotFoundError
+from app.db.session import create_db_engine, create_session_factory
 from app.main import create_app
+from app.models.base import Base
 
 
 @pytest.fixture
@@ -15,8 +18,37 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture
-def app() -> FastAPI:
+async def db_engine() -> AsyncIterator[AsyncEngine]:
+    """Isolated in-memory SQLite database per test.
+
+    SQLite is a testing fallback only. PostgreSQL is the production database and
+    is NOT exercised by these tests.
+    """
+    engine = create_db_engine("sqlite+aiosqlite://")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    yield engine
+    await engine.dispose()
+
+
+@pytest.fixture
+def session_factory(db_engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return create_session_factory(db_engine)
+
+
+@pytest.fixture
+async def session(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> AsyncIterator[AsyncSession]:
+    async with session_factory() as db_session:
+        yield db_session
+
+
+@pytest.fixture
+def app(db_engine: AsyncEngine, session_factory: async_sessionmaker[AsyncSession]) -> FastAPI:
     application = create_app()
+    application.state.engine = db_engine
+    application.state.session_factory = session_factory
     application.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
 
     # Test-only routes that exercise the error handlers.

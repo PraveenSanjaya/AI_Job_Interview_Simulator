@@ -24,8 +24,10 @@ class Settings(BaseSettings):
     app_env: Literal["development", "testing", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
-    # Optional until the database/cache phases; None means "not configured".
+    # None means "not configured". PostgreSQL is the production database; SQLite
+    # URLs are accepted only so automated tests can run without a server.
     database_url: str | None = None
+    database_echo: bool = False
     redis_url: str | None = None
 
     frontend_url: str = "http://localhost:5173"
@@ -36,6 +38,21 @@ class Settings(BaseSettings):
     def _empty_to_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
             return None
+        return value
+
+    @field_validator("database_url", mode="after")
+    @classmethod
+    def _use_async_driver(cls, value: str | None) -> str | None:
+        """Accept plain postgresql:// URLs and select the asyncpg driver."""
+        if value is None:
+            return None
+        for plain, async_prefix in (
+            ("postgresql://", "postgresql+asyncpg://"),
+            ("postgres://", "postgresql+asyncpg://"),
+            ("sqlite://", "sqlite+aiosqlite://"),
+        ):
+            if value.startswith(plain):
+                return async_prefix + value[len(plain) :]
         return value
 
 
