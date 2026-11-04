@@ -142,3 +142,59 @@ async def test_refresh_token_hash_is_unique(session: AsyncSession) -> None:
         )
     with pytest.raises(IntegrityError):
         await session.commit()
+
+
+async def test_resume_defaults_cascade_and_analysis_relationship(session: AsyncSession) -> None:
+    from app.models import Resume, ResumeAnalysis
+    from app.models.enums import ResumeStatus
+
+    user = make_user()
+    session.add(user)
+    await session.flush()
+    resume = Resume(
+        user_id=user.id,
+        display_name="cv.pdf",
+        file_format="pdf",
+        size_bytes=10,
+        sha256="a" * 64,
+        storage_key="k" * 65,
+        analysis=ResumeAnalysis(
+            provider="test", model="m", consent_external_ai=False, result={"facts": {}}
+        ),
+    )
+    session.add(resume)
+    await session.commit()
+    session.expunge_all()
+
+    loaded = (await session.execute(select(Resume))).scalar_one()
+    assert loaded.status is ResumeStatus.UPLOADED
+    assert loaded.failure_stage is None
+    assert loaded.analysis is not None
+    assert loaded.analysis.result == {"facts": {}}
+    assert loaded.created_at.tzinfo is not None
+
+    await session.execute(User.__table__.delete())  # type: ignore[attr-defined]
+    await session.commit()
+    assert await count(session, Resume) == 0
+    assert await count(session, ResumeAnalysis) == 0
+
+
+async def test_resume_storage_key_must_be_unique(session: AsyncSession) -> None:
+    from app.models import Resume
+
+    user = make_user()
+    session.add(user)
+    await session.flush()
+    for _ in range(2):
+        session.add(
+            Resume(
+                user_id=user.id,
+                display_name="cv.pdf",
+                file_format="pdf",
+                size_bytes=1,
+                sha256="b" * 64,
+                storage_key="same-key",
+            )
+        )
+    with pytest.raises(IntegrityError):
+        await session.commit()

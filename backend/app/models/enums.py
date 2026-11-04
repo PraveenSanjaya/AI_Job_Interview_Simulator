@@ -8,6 +8,25 @@ class UserRole(StrEnum):
     ADMIN = "admin"
 
 
+class ResumeStatus(StrEnum):
+    """Lifecycle: uploaded -> extracting -> extracted -> analyzing -> completed.
+
+    ``failed`` can occur at any processing step (see ``FailureStage``).
+    """
+
+    UPLOADED = "uploaded"
+    EXTRACTING = "extracting"
+    EXTRACTED = "extracted"
+    ANALYZING = "analyzing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class FailureStage(StrEnum):
+    EXTRACTION = "extraction"
+    ANALYSIS = "analysis"
+
+
 class ExperienceLevel(StrEnum):
     ENTRY = "entry"
     JUNIOR = "junior"

@@ -26,6 +26,8 @@ EXPECTED_TABLES = {
     "skills",
     "projects",
     "certifications",
+    "resumes",
+    "resume_analyses",
 }
 
 

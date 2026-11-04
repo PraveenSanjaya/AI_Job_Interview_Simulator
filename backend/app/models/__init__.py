@@ -9,6 +9,7 @@ from app.models.profile import (
     UserProfile,
     WorkExperience,
 )
+from app.models.resume import Resume, ResumeAnalysis
 from app.models.user import RefreshToken, User
 
 __all__ = [
@@ -17,6 +18,8 @@ __all__ = [
     "Education",
     "Project",
     "RefreshToken",
+    "Resume",
+    "ResumeAnalysis",
     "Skill",
     "User",
     "UserProfile",
