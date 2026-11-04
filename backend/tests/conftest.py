@@ -25,6 +25,7 @@ from app.main import create_app
 from app.models import Base  # importing the package registers every model
 from app.storage.local import LocalStorage
 from tests.fakes_github import FakeGitHubClient
+from tests.fakes_portfolio import FakeWeb
 
 TEST_JWT_SECRET = "test-only-jwt-secret-0123456789abcdef-xyz"
 _RAW_TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "").strip()
@@ -58,6 +59,7 @@ def build_app(engine: AsyncEngine, settings: Settings, storage_root: Path) -> Fa
     application = create_app()
     application.state.storage = LocalStorage(storage_root)
     application.state.github_client = FakeGitHubClient()
+    application.state.portfolio_fetcher = FakeWeb().fetcher()
     application.state.engine = engine
     application.state.session_factory = create_session_factory(engine)
     application.state.rate_limiter = InMemoryRateLimiter(1000, 60)

@@ -17,6 +17,7 @@ from app.core.middleware import RequestContextMiddleware
 from app.core.rate_limit import InMemoryRateLimiter, NoopRateLimiter, RateLimiter
 from app.db.session import create_db_engine, create_session_factory
 from app.integrations.github.client import GitHubRestClient
+from app.integrations.portfolio.safe_fetch import SafeFetcher
 from app.storage import create_storage
 
 API_V1_PREFIX = "/api/v1"
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
+    await app.state.portfolio_fetcher.aclose()
     if app.state.engine is not None:
         await app.state.engine.dispose()
 
@@ -51,6 +53,10 @@ def create_app() -> FastAPI:
         app.state.session_factory = None
     app.state.storage = create_storage(settings)
     app.state.llm_provider = create_llm_provider(settings)
+    app.state.portfolio_fetcher = SafeFetcher(
+        timeout_seconds=settings.integration_timeout_seconds,
+        max_bytes=settings.integration_max_response_bytes,
+    )
     app.state.github_client = GitHubRestClient(
         base_url=settings.github_api_base_url,
         token=settings.github_token.get_secret_value() if settings.github_token else None,

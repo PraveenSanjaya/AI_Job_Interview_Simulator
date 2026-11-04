@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.integrations.github.snapshot import GitHubSnapshot
+from app.integrations.portfolio.crawler import PortfolioSnapshot
 
 
 class GitHubConnectRequest(BaseModel):
@@ -23,3 +24,21 @@ class GitHubSourceResponse(BaseModel):
     source_ref: str
     fetched_at: datetime
     snapshot: GitHubSnapshot
+
+
+class PortfolioConnectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="Public http(s) address of your portfolio site",
+    )
+
+
+class PortfolioSourceResponse(BaseModel):
+    """What the public pages said, with source URLs. Untrusted text, not verified facts."""
+
+    source_ref: str
+    fetched_at: datetime
+    snapshot: PortfolioSnapshot
