@@ -23,7 +23,7 @@ pytestmark = pytest.mark.anyio
 def make_user(email: str = "a@example.com") -> User:
     return User(
         email=email,
-        hashed_password="not-a-real-hash",  # noqa: S106
+        hashed_password="not-a-real-hash",
         profile=UserProfile(full_name="Ada Lovelace"),
     )
 

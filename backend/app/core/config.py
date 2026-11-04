@@ -1,10 +1,14 @@
 """Environment-based application configuration (Pydantic Settings)."""
 
+import secrets
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+MIN_PRODUCTION_SECRET_LENGTH = 32
+PLACEHOLDER_SECRETS = {"replace_with_secure_secret", "changeme", "secret"}
 
 
 class Settings(BaseSettings):
@@ -30,6 +34,20 @@ class Settings(BaseSettings):
     database_echo: bool = False
     redis_url: str | None = None
 
+    # Authentication. In production the signing secret is mandatory; elsewhere an
+    # unset secret becomes a random per-process one (tokens die on restart).
+    jwt_secret_key: SecretStr | None = None
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
+    jwt_issuer: str = "ai-job-interview-simulator"
+    jwt_access_token_expire_minutes: int = Field(default=30, ge=1, le=1440)
+    jwt_refresh_token_expire_days: int = Field(default=7, ge=1, le=90)
+    jwt_secret_is_ephemeral: bool = False
+
+    # Per-process rate limiting (see app.core.rate_limit); not shared between workers.
+    rate_limit_enabled: bool = True
+    auth_rate_limit_attempts: int = Field(default=10, ge=1)
+    auth_rate_limit_window_seconds: int = Field(default=60, ge=1)
+
     frontend_url: str = "http://localhost:5173"
     backend_url: str = "http://localhost:8000"
 
@@ -54,6 +72,20 @@ class Settings(BaseSettings):
             if value.startswith(plain):
                 return async_prefix + value[len(plain) :]
         return value
+
+    @model_validator(mode="after")
+    def _ensure_jwt_secret(self) -> Self:
+        secret = self.jwt_secret_key.get_secret_value() if self.jwt_secret_key else ""
+        if self.app_env == "production":
+            if len(secret) < MIN_PRODUCTION_SECRET_LENGTH or secret in PLACEHOLDER_SECRETS:
+                raise ValueError(
+                    "JWT_SECRET_KEY must be set to a random value of at least "
+                    f"{MIN_PRODUCTION_SECRET_LENGTH} characters in production"
+                )
+        elif not secret or secret in PLACEHOLDER_SECRETS:
+            self.jwt_secret_key = SecretStr(secrets.token_urlsafe(48))
+            self.jwt_secret_is_ephemeral = True
+        return self
 
 
 @lru_cache

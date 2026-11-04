@@ -15,6 +15,7 @@ def test_defaults_require_no_credentials(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("JWT_SECRET_KEY", "p" * 40)
     monkeypatch.setenv("LOG_LEVEL", "WARNING")
     monkeypatch.setenv("REDIS_URL", "redis://example:6379/0")
     settings = Settings(_env_file=None)

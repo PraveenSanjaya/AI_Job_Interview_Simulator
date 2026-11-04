@@ -2,7 +2,7 @@ from argon2 import PasswordHasher
 
 from app.core.passwords import hash_password, needs_rehash, verify_against_dummy, verify_password
 
-PASSWORD = "correct horse battery 42"  # noqa: S105
+PASSWORD = "correct horse battery 42"
 
 
 def test_hash_is_argon2id_and_not_plaintext() -> None:
