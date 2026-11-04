@@ -35,6 +35,38 @@ class JobStatus(StrEnum):
     FAILED = "failed"
 
 
+class InterviewType(StrEnum):
+    HR = "hr"
+    BEHAVIORAL = "behavioral"
+    TECHNICAL = "technical"
+    PROGRAMMING = "programming"
+    PROJECT = "project"
+    SYSTEM_DESIGN = "system_design"
+    JOB_SPECIFIC = "job_specific"
+
+
+class SessionDifficulty(StrEnum):
+    BEGINNER = "beginner"
+    INTERMEDIATE = "intermediate"
+    ADVANCED = "advanced"
+
+
+class InterviewStatus(StrEnum):
+    CREATED = "created"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    INTERRUPTED = "interrupted"
+    EXPIRED = "expired"
+
+
+class EvaluationStatus(StrEnum):
+    EVALUATED = "evaluated"
+    UNAVAILABLE = "unavailable"
+    FAILED = "failed"
+    NOT_EVALUATED = "not_evaluated"
+
+
 class FailureStage(StrEnum):
     EXTRACTION = "extraction"
     ANALYSIS = "analysis"

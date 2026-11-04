@@ -2,6 +2,13 @@
 
 from app.models.base import Base
 from app.models.integration import IntegrationAnalysis, IntegrationSource
+from app.models.interview import (
+    InterviewAnswer,
+    InterviewEvaluation,
+    InterviewQuestion,
+    InterviewReport,
+    InterviewSession,
+)
 from app.models.job import JobAnalysis, JobDescription, JobMatch
 from app.models.profile import (
     Certification,
@@ -20,6 +27,11 @@ __all__ = [
     "Education",
     "IntegrationAnalysis",
     "IntegrationSource",
+    "InterviewAnswer",
+    "InterviewEvaluation",
+    "InterviewQuestion",
+    "InterviewReport",
+    "InterviewSession",
     "JobAnalysis",
     "JobDescription",
     "JobMatch",

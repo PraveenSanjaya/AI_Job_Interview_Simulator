@@ -33,6 +33,11 @@ EXPECTED_TABLES = {
     "job_descriptions",
     "job_analyses",
     "job_matches",
+    "interview_sessions",
+    "interview_questions",
+    "interview_answers",
+    "interview_evaluations",
+    "interview_reports",
 }
 
 
