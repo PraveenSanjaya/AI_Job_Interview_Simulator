@@ -58,3 +58,39 @@ export function signedInHandlers(): HttpHandler[] {
 export function useHandlers(...handlers: HttpHandler[]) {
   server.use(...handlers);
 }
+
+const notFound = (what: string) =>
+  errorBody('source_not_connected', `No ${what} source is connected`, 404);
+
+/** The data endpoints the dashboard reads, for an account with no data yet. */
+export function emptyAccountDataHandlers(): HttpHandler[] {
+  return [
+    http.get(api('/profile'), () =>
+      HttpResponse.json({
+        email: 'ada@example.com',
+        full_name: 'Ada Lovelace',
+        headline: null,
+        career_objective: null,
+        experience_level: null,
+        preferred_difficulty: null,
+        preferred_roles: [],
+        education: [],
+        work_experience: [],
+        skills: [],
+        projects: [],
+        certifications: [],
+        updated_at: '2026-01-01T00:00:00Z',
+      }),
+    ),
+    http.get(api('/resumes'), () => HttpResponse.json([])),
+    http.get(api('/jobs'), () => HttpResponse.json([])),
+    http.get(api('/interviews'), () => HttpResponse.json([])),
+    http.get(api('/integrations/github'), () => notFound('github')),
+    http.get(api('/integrations/portfolio'), () => notFound('portfolio')),
+  ];
+}
+
+/** A signed-in user with an empty account. */
+export function emptyAccountHandlers(): HttpHandler[] {
+  return [...signedInHandlers(), ...emptyAccountDataHandlers()];
+}

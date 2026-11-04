@@ -1,10 +1,10 @@
 import { Link, Route, Routes } from 'react-router-dom';
-import { useAuth } from '@/auth/AuthContext';
 import { GuestOnly, RequireAuth } from '@/auth/RequireAuth';
 import { AppShell } from '@/components/layout/AppShell';
-import { EmptyState, PageHeader } from '@/components/ui';
+import { EmptyState } from '@/components/ui';
 import { LoginPage, RegisterPage } from '@/pages/AuthPages';
 import { ConnectionsPage } from '@/pages/ConnectionsPage';
+import { DashboardPage } from '@/pages/DashboardPage';
 import { InterviewReportPage } from '@/pages/InterviewReportPage';
 import { InterviewSessionPage } from '@/pages/InterviewSessionPage';
 import { InterviewsPage, NewInterviewPage } from '@/pages/InterviewsPages';
@@ -26,11 +26,6 @@ function NotFound() {
   );
 }
 
-function Home() {
-  const { user } = useAuth();
-  return <PageHeader title="Dashboard" description={`Signed in as ${user?.email ?? ''}`} />;
-}
-
 export function App() {
   return (
     <Routes>
@@ -40,7 +35,7 @@ export function App() {
       </Route>
       <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
-          <Route index element={<Home />} />
+          <Route index element={<DashboardPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="resumes" element={<ResumesPage />} />
           <Route path="connections" element={<ConnectionsPage />} />

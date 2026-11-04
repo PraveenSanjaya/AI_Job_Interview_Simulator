@@ -2,7 +2,15 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { tokens } from '@/lib/tokens';
-import { api, errorBody, renderApp, signedInHandlers, useHandlers, USER } from './utils';
+import {
+  api,
+  emptyAccountDataHandlers,
+  emptyAccountHandlers,
+  errorBody,
+  renderApp,
+  useHandlers,
+  USER,
+} from './utils';
 
 const PAIR = {
   access_token: 'access-1',
@@ -26,6 +34,7 @@ describe('authentication flows', () => {
         });
         return HttpResponse.json(PAIR);
       }),
+      ...emptyAccountDataHandlers(),
       http.get(api('/auth/me'), ({ request }) => {
         expect(request.headers.get('authorization')).toBe('Bearer access-1');
         return HttpResponse.json(USER);
@@ -114,6 +123,7 @@ describe('authentication flows', () => {
         return HttpResponse.json(PAIR);
       }),
       http.get(api('/auth/me'), () => HttpResponse.json(USER)),
+      ...emptyAccountDataHandlers(),
     );
     renderApp('/register');
     const user = userEvent.setup();
@@ -126,7 +136,7 @@ describe('authentication flows', () => {
   });
 
   it('restores a session after a reload', async () => {
-    useHandlers(...signedInHandlers());
+    useHandlers(...emptyAccountHandlers());
     renderApp('/');
     expect(await screen.findByRole('button', { name: /sign out/i })).toBeInTheDocument();
     expect(tokens.getRefresh()).toBe('refresh-2'); // the rotated token replaced the old one
@@ -147,7 +157,7 @@ describe('authentication flows', () => {
   it('signs out: revokes the session on the server and clears local state', async () => {
     let revoked: unknown;
     useHandlers(
-      ...signedInHandlers(),
+      ...emptyAccountHandlers(),
       http.post(api('/auth/logout'), async ({ request }) => {
         revoked = await request.json();
         return new HttpResponse(null, { status: 204 });
@@ -164,7 +174,7 @@ describe('authentication flows', () => {
 
   it('signs out locally even if the server cannot be reached', async () => {
     useHandlers(
-      ...signedInHandlers(),
+      ...emptyAccountHandlers(),
       http.post(api('/auth/logout'), () => HttpResponse.error()),
     );
     renderApp('/');
@@ -174,14 +184,14 @@ describe('authentication flows', () => {
   });
 
   it('redirects signed-in users away from the login page', async () => {
-    useHandlers(...signedInHandlers());
+    useHandlers(...emptyAccountHandlers());
     renderApp('/login');
     expect(await screen.findByRole('button', { name: /sign out/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Sign in' })).not.toBeInTheDocument();
   });
 
   it('shows a not-found page inside the app for unknown routes', async () => {
-    useHandlers(...signedInHandlers());
+    useHandlers(...emptyAccountHandlers());
     renderApp('/definitely/not/here');
     expect(await screen.findByText('Page not found')).toBeInTheDocument();
   });

@@ -100,7 +100,7 @@ export function InterviewsPage() {
 }
 
 /** Scores come only from stored reports of completed interviews; nothing is estimated. */
-function ProgressCard({ items }: { items: InterviewSummary[] }) {
+export function ProgressCard({ items }: { items: InterviewSummary[] }) {
   const completed = items.filter((i) => i.status === 'completed').slice(0, 12);
   const reports = useQueries({
     queries: completed.map((i) => ({
