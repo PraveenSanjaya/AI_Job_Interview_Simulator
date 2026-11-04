@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     auth_rate_limit_attempts: int = Field(default=10, ge=1)
     auth_rate_limit_window_seconds: int = Field(default=60, ge=1)
 
+    # AI. Optional: with ai_provider="none" (default) every non-AI feature still works.
+    # Resume text is only sent to a non-local provider when the user explicitly consents.
+    ai_provider: Literal["none", "openai"] = "none"
+    openai_api_key: SecretStr | None = None
+    openai_model: str | None = None  # no default: model names are deployment decisions
+    openai_base_url: str = "https://api.openai.com/v1"
+    ai_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+    ai_max_input_chars: int = Field(default=30_000, ge=1000, le=200_000)
+
     # Document storage. "local" writes under local_storage_path (must not be served by a
     # web server); "s3" is reserved for a later phase and rejected at startup.
     storage_backend: Literal["local", "s3"] = "local"
@@ -57,7 +66,7 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     backend_url: str = "http://localhost:8000"
 
-    @field_validator("database_url", "redis_url", mode="before")
+    @field_validator("database_url", "redis_url", "openai_api_key", "openai_model", mode="before")
     @classmethod
     def _empty_to_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():

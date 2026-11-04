@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.ai import create_llm_provider
 from app.api import health
 from app.api.v1.router import api_router
 from app.core.body_limit import MaxBodySizeMiddleware
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
         app.state.engine = None
         app.state.session_factory = None
     app.state.storage = create_storage(settings)
+    app.state.llm_provider = create_llm_provider(settings)
     limiter: RateLimiter = (
         InMemoryRateLimiter(
             settings.auth_rate_limit_attempts, settings.auth_rate_limit_window_seconds
