@@ -90,6 +90,8 @@ class Settings(BaseSettings):
     max_upload_bytes: int = Field(default=5 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024)
 
     frontend_url: str = "http://localhost:5173"
+    # Extra browser origins allowed to call the API (JSON list). ``frontend_url`` is always allowed.
+    cors_allowed_origins: list[str] = Field(default_factory=list)
     backend_url: str = "http://localhost:8000"
 
     @field_validator("interview_scoring", mode="after")

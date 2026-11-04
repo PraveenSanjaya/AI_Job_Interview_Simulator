@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.ai import create_llm_provider
 from app.api import health
@@ -84,6 +85,23 @@ def create_app() -> FastAPI:
         path_prefix=f"{API_V1_PREFIX}/resumes",
     )
     app.add_middleware(RequestContextMiddleware)
+    # Outermost, so preflights and even error responses carry the CORS headers. Only the
+    # configured browser origins are allowed; credentials (cookies) are not used: the API
+    # authenticates with a bearer token in the Authorization header.
+    origins = list(
+        dict.fromkeys(
+            o.rstrip("/") for o in [settings.frontend_url, *settings.cors_allowed_origins] if o
+        )
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+        expose_headers=["X-Request-ID", "Retry-After"],
+        allow_credentials=False,
+        max_age=600,
+    )
     app.include_router(health.router)
     app.include_router(api_router, prefix=API_V1_PREFIX)
     return app
