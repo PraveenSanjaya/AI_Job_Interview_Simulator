@@ -39,5 +39,5 @@ def test_invalid_environment_fails_at_startup(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_unknown_variables_are_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OPENAI_API_KEY", "not-used-yet")
-    assert not hasattr(Settings(_env_file=None), "openai_api_key")
+    monkeypatch.setenv("SOME_FUTURE_API_KEY", "not-used-yet")
+    assert not hasattr(Settings(_env_file=None), "some_future_api_key")
