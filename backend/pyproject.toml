@@ -50,6 +50,12 @@ strict = true
 files = ["app", "tests"]
 plugins = ["pydantic.mypy"]
 
+[[tool.mypy.overrides]]
+# PyMuPDF and python-docx ship without complete type information.
+module = ["tests.samples", "app.documents.extract"]
+disallow_untyped_calls = false
+disallow_any_generics = false
+
 [tool.coverage.run]
 source = ["app"]
 # Async SQLAlchemy runs on greenlets and password hashing on threads; without
