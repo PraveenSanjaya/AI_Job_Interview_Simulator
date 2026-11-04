@@ -5,7 +5,14 @@ import hashlib
 from fastapi import APIRouter, status
 
 from app.api.deps import AuthServiceDep, ClientIpDep, RateLimiterDep
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from app.schemas.auth import (
+    LoginRequest,
+    LogoutRequest,
+    RefreshRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserResponse,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -36,3 +43,27 @@ async def login(
     limiter.hit(f"login:ip:{ip}")
     limiter.hit(f"login:email:{hashlib.sha256(body.email.encode()).hexdigest()}")
     return await service.login(email=body.email, password=body.password)
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh(
+    body: RefreshRequest,
+    service: AuthServiceDep,
+    limiter: RateLimiterDep,
+    ip: ClientIpDep,
+) -> TokenResponse:
+    """Exchange a refresh token for a new pair. The presented token is single-use."""
+    limiter.hit(f"refresh:ip:{ip}")
+    return await service.refresh(body.refresh_token)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(
+    body: LogoutRequest,
+    service: AuthServiceDep,
+    limiter: RateLimiterDep,
+    ip: ClientIpDep,
+) -> None:
+    """Revoke the session for this refresh token. Always 204 (idempotent)."""
+    limiter.hit(f"logout:ip:{ip}")
+    await service.logout(body.refresh_token)

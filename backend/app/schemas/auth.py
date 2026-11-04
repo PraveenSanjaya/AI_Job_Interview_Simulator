@@ -48,6 +48,14 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=1, max_length=512)
+
+
+class LogoutRequest(RefreshRequest):
+    pass
+
+
 class UserResponse(BaseModel):
     """Public view of a user. Never includes password or token hashes."""
 

@@ -1,8 +1,10 @@
 """Authentication business logic: registration, login, token issuing."""
 
 import asyncio
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import NoReturn
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +19,9 @@ from app.repositories.users import UserRepository
 from app.schemas.auth import TokenResponse
 
 INVALID_CREDENTIALS = "Incorrect email or password"
+INVALID_REFRESH = "Invalid or expired refresh token"
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -69,6 +74,51 @@ class AuthService:
         tokens = self._issue_tokens(user.id, family_id=uuid.uuid4())
         await self._session.commit()
         return tokens
+
+    async def refresh(self, raw_refresh_token: str) -> TokenResponse:
+        """Rotate a refresh token: revoke the presented one and issue a new pair.
+
+        Presenting an already-revoked token means it was stolen or replayed, so the
+        entire token family (every descendant of the original login) is revoked.
+        """
+        stored = await self._tokens.get_by_hash(hash_refresh_token(raw_refresh_token))
+        if stored is None:
+            raise UnauthorizedError(INVALID_REFRESH, code="invalid_refresh_token")
+
+        now = datetime.now(UTC)
+        if stored.revoked_at is not None:
+            await self._reject_reuse(stored, now)
+        if stored.expires_at <= now:
+            raise UnauthorizedError(INVALID_REFRESH, code="invalid_refresh_token")
+
+        user = await self._users.get_by_id(stored.user_id)
+        if user is None or not user.is_active:
+            raise UnauthorizedError(INVALID_REFRESH, code="invalid_refresh_token")
+
+        if not await self._tokens.revoke_if_active(stored.id, now):
+            # Lost a concurrent rotation race: treat the loser as a replay.
+            await self._reject_reuse(stored, now)
+
+        tokens = self._issue_tokens(user.id, family_id=stored.family_id)
+        await self._session.commit()
+        return tokens
+
+    async def logout(self, raw_refresh_token: str) -> None:
+        """Revoke the session owning this refresh token. Idempotent; never reveals
+        whether the token existed."""
+        stored = await self._tokens.get_by_hash(hash_refresh_token(raw_refresh_token))
+        if stored is not None:
+            await self._tokens.revoke_family(stored.family_id, datetime.now(UTC))
+            await self._session.commit()
+
+    async def _reject_reuse(self, stored: RefreshToken, now: datetime) -> NoReturn:
+        await self._tokens.revoke_family(stored.family_id, now)
+        await self._session.commit()  # must persist before the error aborts the request
+        logger.warning(
+            "Refresh token reuse detected; token family revoked",
+            extra={"user_id": str(stored.user_id), "family_id": str(stored.family_id)},
+        )
+        raise UnauthorizedError(INVALID_REFRESH, code="invalid_refresh_token")
 
     def _issue_tokens(self, user_id: uuid.UUID, *, family_id: uuid.UUID) -> TokenResponse:
         """Create an access token and a persisted refresh token (caller commits)."""
