@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -11,9 +12,11 @@ from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.core.rate_limit import InMemoryRateLimiter, NoopRateLimiter, RateLimiter
 from app.db.session import create_db_engine, create_session_factory
 
 API_V1_PREFIX = "/api/v1"
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -41,6 +44,19 @@ def create_app() -> FastAPI:
     else:
         app.state.engine = None
         app.state.session_factory = None
+    limiter: RateLimiter = (
+        InMemoryRateLimiter(
+            settings.auth_rate_limit_attempts, settings.auth_rate_limit_window_seconds
+        )
+        if settings.rate_limit_enabled
+        else NoopRateLimiter()
+    )
+    app.state.rate_limiter = limiter
+    if settings.jwt_secret_is_ephemeral:
+        logger.warning(
+            "JWT_SECRET_KEY is not set; using a random per-process secret. Tokens become "
+            "invalid on restart and are not shared between workers."
+        )
     register_exception_handlers(app)
     app.add_middleware(RequestContextMiddleware)
     app.include_router(health.router)

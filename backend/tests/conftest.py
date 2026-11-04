@@ -7,9 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.core.exceptions import NotFoundError
+from app.core.rate_limit import InMemoryRateLimiter
 from app.db.session import create_db_engine, create_session_factory
 from app.main import create_app
 from app.models import Base  # importing the package registers every model
+
+TEST_JWT_SECRET = "test-only-jwt-secret-0123456789abcdef-xyz"
 
 
 @pytest.fixture
@@ -45,11 +48,22 @@ async def session(
 
 
 @pytest.fixture
-def app(db_engine: AsyncEngine, session_factory: async_sessionmaker[AsyncSession]) -> FastAPI:
+def settings() -> Settings:
+    """One fixed settings object (a fresh Settings() would generate a new JWT secret)."""
+    return Settings(_env_file=None, jwt_secret_key=TEST_JWT_SECRET)
+
+
+@pytest.fixture
+def app(
+    db_engine: AsyncEngine,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+) -> FastAPI:
     application = create_app()
     application.state.engine = db_engine
     application.state.session_factory = session_factory
-    application.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
+    application.state.rate_limiter = InMemoryRateLimiter(1000, 60)
+    application.dependency_overrides[get_settings] = lambda: settings
 
     # Test-only routes that exercise the error handlers.
     @application.get("/_test/boom")
