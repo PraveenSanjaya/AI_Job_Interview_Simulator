@@ -179,3 +179,88 @@ Body fields (all optional, but at least one must be present; unknown fields are 
 - **Lists, `replace`:** the provided section replaces the existing one. Sections you do not send are untouched.
 - **Scalars:** filled when empty or identical. When the profile already holds a different value it is kept and reported in `skipped`, unless `overwrite_existing` is `true`.
 - Response: `{"applied": {"skills": 4, …}, "skipped": [{"field": "career_objective", "reason": "…"}], "profile": { … }}`.
+
+## Integrations (GitHub, portfolio, analysis)
+
+All endpoints require a Bearer token and operate only on the caller's own data; another user's analysis behaves like a missing one (`404 analysis_not_found`). Design, SSRF controls and privacy are described in [INTEGRATIONS.md](INTEGRATIONS.md). The candidate profile is never modified by connecting a source.
+
+### POST `/integrations/github` → 200
+
+Body: `{"username": "octocat"}`. The value may be a username, `@username`, or a `github.com` profile URL. Connects, or refreshes/replaces, the caller's single GitHub source and returns the observed-fact snapshot:
+
+```json
+{"source_ref": "octocat", "fetched_at": "…",
+ "snapshot": {"login": "octocat", "profile_url": "https://github.com/octocat", "bio": "…",
+   "followers": 0, "public_repos_total": 8, "repos_listed": 8, "repos_truncated": false,
+   "repositories": [{"name": "…", "url": "…", "description": "…", "primary_language": "…",
+                      "topics": [], "stars": 0, "is_fork": false, "is_archived": false,
+                      "pushed_at": "…", "readme_excerpt": "…", "readme_truncated": false}],
+   "language_distribution": {"Python": 3}, "total_stars_own_repos": 0,
+   "activity": {"own_repos_pushed_last_90_days": 1, "own_repos_pushed_last_365_days": 2,
+                "most_recent_push": "…"},
+   "readmes_fetched": 4, "readme_fetch_incomplete": false, "notice": "…"}}
+```
+
+Replacing a connection also deletes analyses derived from the previous one. A failed refresh keeps the existing connection.
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 422 | `invalid_github_username` | not a valid username or `github.com` URL (nothing was requested) |
+| 422 | `github_not_a_user` | the account is an organization |
+| 404 | `github_user_not_found` | nonexistent, deleted, suspended or private |
+| 429 | `github_rate_limited` | GitHub's API limit; `Retry-After` is set when known |
+| 502 | `github_unavailable` | GitHub unreachable, slow or returned an unexpected response |
+
+### GET `/integrations/github` → 200, DELETE `/integrations/github` → 204
+
+Return the stored snapshot / disconnect and delete the snapshot and analyses derived from it. `404 source_not_connected` if nothing is connected.
+
+### POST `/integrations/portfolio` → 200
+
+Body: `{"url": "https://jane.example/"}`. Fetches the page and a few relevant same-host pages (see INTEGRATIONS.md) and returns:
+
+```json
+{"source_ref": "https://jane.example/", "fetched_at": "…",
+ "snapshot": {"requested_url": "…", "host": "jane.example",
+   "pages": [{"url": "…", "title": "…", "description": "…", "headings": [],
+              "text_excerpt": "…", "text_truncated": false,
+              "external_links": [{"url": "…", "text": "GitHub"}]}],
+   "skipped_pages": [{"url": "…", "reason": "disallowed by robots.txt"}],
+   "robots_txt_checked": true, "fetched_at": "…", "notice": "…"}}
+```
+
+Text is what the site says (untrusted, not verified). Errors: `422 portfolio_url_rejected` (scheme, port, credentials, internal or non-public host/address, unsafe redirect target; no request is made for syntactic rejections) and `502` with `portfolio_timeout`, `portfolio_too_large`, `portfolio_unsupported_content_type`, `portfolio_http_error`, `portfolio_redirects` or `portfolio_unreachable`.
+
+### GET `/integrations/portfolio` → 200, DELETE `/integrations/portfolio` → 204
+
+As for GitHub.
+
+### POST `/integrations/analysis` → 201
+
+Body (all optional): `{"include": ["github", "portfolio"], "resume_id": "…", "allow_external_ai": false}`. `include` defaults to every connected source; `resume_id` adds the verified details of one of your analysed resumes for comparison; `allow_external_ai` is the explicit consent needed when the AI provider is external.
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 503 | `ai_unavailable` | no AI provider configured (connecting sources still works) |
+| 403 | `ai_consent_required` | external provider and no explicit consent; nothing was sent |
+| 409 | `no_sources_connected` | nothing to analyse |
+| 404 | `source_not_connected` / `resume_not_found` | an explicitly requested source or resume is not yours / not connected |
+| 409 | `resume_not_analyzed` | analyse the resume first |
+| 502 / 504 / 429 | `invalid_ai_response` / `ai_timeout` / `ai_rate_limited` | AI failure; nothing is stored |
+
+Response: `{"id", "created_at", "provider", "model", "consent_external_ai", "input_truncated", "github_source_id", "portfolio_source_id", "resume_id", "result", "profile_suggestion", "suggestion_notes"}` where
+
+* `result.facts`: **computed by code**: `sources_used`, `github` (login, language distribution, notable repositories, activity count), `portfolio` (host and pages), `consistency` (CV skills with or without a literal match in the public sources).
+* `result.assessment`: **AI opinion**: `summary`, `strengths`, `potential_skill_gaps`, `project_assessments` (each with a source reference, technologies demonstrated, relevance, `complexity` of `basic|moderate|advanced|unclear` and its basis), `demonstrated_skills` (each with evidence references), `consistency_notes`, `caveats`. Claims the sources do not support are removed.
+* `result.unverified_items_removed`: how many AI claims were removed.
+* `profile_suggestion`: **not applied**; `suggestion_notes` lists anything left out.
+
+Neither facts nor assessment measure programming ability; repository counts and activity are descriptive only.
+
+### GET `/integrations/analysis` → 200, GET `/integrations/analysis/{id}` → 200, DELETE `/integrations/analysis/{id}` → 204
+
+List (newest first, with `sources_used`), retrieve, and delete your analyses.
+
+### POST `/integrations/analysis/{id}/apply-to-profile` → 200
+
+Same request, merge rules and response as `POST /resumes/{id}/apply-to-profile`: only the fields and sections you send are applied, existing profile data is preserved unless you explicitly choose `mode="replace"` or `overwrite_existing`, and skipped items are reported.
