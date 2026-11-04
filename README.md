@@ -6,11 +6,13 @@ See [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md), [docs/ARCHITECTURE.md](docs/AR
 
 ## Status
 
-Phase 1 (backend foundation) is implemented: FastAPI app, configuration, health endpoints, error handling, logging and tests. Authentication, database, AI and voice features are not implemented yet.
+Implemented: backend foundation (Phase 1) and database, authentication and candidate profiles (Phase 2). Not implemented yet: frontend, resume/GitHub/portfolio analysis, AI interviews, RAG/memory, voice, Redis integration and email delivery (password reset, email verification).
+
+See [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md) and [docs/DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md).
 
 ## Backend setup
 
-Requires Python 3.12+. Docker, PostgreSQL and Redis are **not** required at this stage.
+Requires Python 3.12+. The API starts without a database (health endpoints work, database-backed endpoints return `503 database_unavailable`).
 
 ```bash
 cd backend
@@ -20,6 +22,23 @@ python -m venv .venv
 pip install -r requirements-dev.txt
 cp ../.env.example ../.env   # optional; all values have safe defaults
 ```
+
+### Database
+
+PostgreSQL is the intended database. For local development either start the provided containers (needs Docker and `POSTGRES_PASSWORD` in `.env`):
+
+```bash
+docker compose up -d postgres redis
+```
+
+or point `DATABASE_URL` at any PostgreSQL server (`postgresql://user:password@host:5432/db` is upgraded to the asyncpg driver automatically). Then create the schema:
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+For a quick throwaway setup without PostgreSQL you can use SQLite (`DATABASE_URL=sqlite+aiosqlite:///./dev.db`). SQLite is meant for automated tests and is not a production target.
 
 ### Run
 
@@ -41,8 +60,15 @@ Settings are read from environment variables or a `.env` file (see `.env.example
 |---|---|---|
 | `APP_ENV` | `development` | `development`, `testing` or `production` |
 | `LOG_LEVEL` | `INFO` | Standard Python level names |
-| `DATABASE_URL` | unset | Not used yet |
-| `REDIS_URL` | unset | Not used yet |
+| `DATABASE_URL` | unset | PostgreSQL URL. Unset means database features are unavailable |
+| `REDIS_URL` | unset | Reported by readiness only; not used yet |
+| `JWT_SECRET_KEY` | unset | **Required (32+ random characters) when `APP_ENV=production`.** Otherwise a random per-process secret is used and a warning is logged |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime |
+| `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime |
+| `RATE_LIMIT_ENABLED` | `true` | In-memory, per-process limiter |
+| `AUTH_RATE_LIMIT_ATTEMPTS` / `AUTH_RATE_LIMIT_WINDOW_SECONDS` | `10` / `60` | Auth endpoint limits |
+
+Generate a secret with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 
 ### Errors and logging
 
@@ -62,9 +88,13 @@ mypy
 ```text
 backend/
   app/
-    api/         # HTTP routers (health.py, v1/)
-    core/        # config, logging, middleware, exceptions
-    schemas/     # Pydantic request/response models
-    services/    # business logic, independent of HTTP
+    api/           # HTTP routers and dependencies (health.py, deps.py, v1/)
+    core/          # config, logging, middleware, exceptions, passwords, tokens, rate limiting
+    db/            # engine, session dependency, column types
+    models/        # SQLAlchemy models
+    repositories/  # database access
+    schemas/       # Pydantic request/response models
+    services/      # business logic, independent of HTTP
+  migrations/      # Alembic
   tests/
 ```
