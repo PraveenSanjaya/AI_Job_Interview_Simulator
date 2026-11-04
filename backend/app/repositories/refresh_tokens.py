@@ -16,10 +16,19 @@ class RefreshTokenRepository:
     def add(self, token: RefreshToken) -> None:
         self._session.add(token)
 
-    async def get_by_hash(self, token_hash: str) -> RefreshToken | None:
-        result = await self._session.execute(
-            select(RefreshToken).where(RefreshToken.token_hash == token_hash)
-        )
+    async def get_by_hash(
+        self, token_hash: str, *, for_update: bool = False
+    ) -> RefreshToken | None:
+        """Look a token up by digest.
+
+        ``for_update`` takes a row lock (``SELECT ... FOR UPDATE``) on databases that
+        support it, so concurrent rotations of the same token queue up and the later
+        ones observe it as already revoked. SQLite has no row locks and ignores it.
+        """
+        statement = select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+        if for_update:
+            statement = statement.with_for_update()
+        result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
     async def revoke_if_active(self, token_id: uuid.UUID, now: datetime) -> bool:

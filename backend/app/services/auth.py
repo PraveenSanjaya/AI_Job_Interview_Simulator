@@ -88,7 +88,9 @@ class AuthService:
         Presenting an already-revoked token means it was stolen or replayed, so the
         entire token family (every descendant of the original login) is revoked.
         """
-        stored = await self._tokens.get_by_hash(hash_refresh_token(raw_refresh_token))
+        stored = await self._tokens.get_by_hash(
+            hash_refresh_token(raw_refresh_token), for_update=True
+        )
         if stored is None:
             raise UnauthorizedError(INVALID_REFRESH, code="invalid_refresh_token")
 
