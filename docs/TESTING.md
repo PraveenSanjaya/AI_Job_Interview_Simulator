@@ -70,6 +70,9 @@ Semantics under a race: exactly one request receives new tokens, the others rece
 | `test_jobs_api.py` | job CRUD, validation, ownership, URL import and SSRF/restricted-site protection |
 | `test_job_ai_analysis.py` | AI enrichment: grounding, consent, failures, prompt-injection handling |
 | `test_matching_engine.py` | scoring maths, weights, boundaries, evidence rules, de-duplication, honesty rules |
+| `test_interview_models.py`, `test_interview_core.py` | interview tables and cascades; state machine, question bank, scoring rules and report assembly |
+| `test_interview_ai.py`, `fakes_interview.py` | AI interviewer/evaluator/feedback components with a scripted provider |
+| `test_interviews_api.py`, `test_interviews_ai_flow.py` | sessions API, state transitions, bank mode, ownership, concurrency; AI mode, follow-ups, evaluation failures, reports, injection and privacy |
 | `test_match_api.py`, `test_match_ai.py` | match API: sources, history preservation, privacy, isolation; AI advice safeguards |
 | `test_health.py`, `test_errors_and_logging.py` | health endpoints, error shape, logging |
 
