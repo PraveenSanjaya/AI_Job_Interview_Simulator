@@ -5,6 +5,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { EmptyState, PageHeader } from '@/components/ui';
 import { LoginPage, RegisterPage } from '@/pages/AuthPages';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { ResumesPage } from '@/pages/ResumesPage';
 
 function NotFound() {
   return (
@@ -36,6 +37,7 @@ export function App() {
         <Route element={<AppShell />}>
           <Route index element={<Home />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="resumes" element={<ResumesPage />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>
