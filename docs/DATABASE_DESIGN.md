@@ -4,7 +4,7 @@ PostgreSQL is the intended production database, accessed through SQLAlchemy 2.x 
 
 > **Verification status.** Migrations and models are tested against SQLite only (a testing fallback). The PostgreSQL DDL is generated and inspected offline (`alembic upgrade head --sql`) but has **not** been executed against a PostgreSQL server in this environment. pgvector is not used yet and will be added by the feature that needs it.
 
-## Entities (Phases 2-4)
+## Entities (Phases 2-5)
 
 ```mermaid
 erDiagram
@@ -57,6 +57,8 @@ erDiagram
 `resumes` (migration `0002`): `id`, `user_id` (FK, cascade), `display_name`, `file_format`, `size_bytes`, `sha256`, `storage_key` (unique), `status` (`uploaded|extracting|extracted|analyzing|completed|failed`), `failure_stage`, `error_code`, `error_message`, `page_count`, `char_count`, `word_count`, `extracted_at`, `analyzed_at`, timestamps; indexed by `(user_id, created_at)`. `resume_analyses`: `id`, `resume_id` (FK, cascade, unique: one current analysis per resume), `provider`, `model`, `consent_external_ai`, `input_truncated`, `result` (JSON: verified facts and AI assessment), `created_at`. Extracted text is deliberately not stored. See [RESUME_PROCESSING.md](RESUME_PROCESSING.md).
 
 `integration_sources` (migration `0003`): `id`, `user_id` (FK, cascade), `kind` (`github|portfolio`), `source_ref` (GitHub login or portfolio URL), `snapshot` (JSON of observed facts), `fetched_at`, timestamps; unique on `(user_id, kind)` so a user has at most one source per kind and reconnecting replaces it. `integration_analyses`: `id`, `user_id` (FK, cascade), optional `github_source_id`, `portfolio_source_id` and `resume_id` (FKs, all `ON DELETE CASCADE`, so an analysis disappears with any input it was derived from), `provider`, `model`, `consent_external_ai`, `input_truncated`, `result` (JSON: computed facts plus verified AI assessment), `created_at`; indexed by `(user_id, created_at)`. See [INTEGRATIONS.md](INTEGRATIONS.md).
+
+`job_descriptions` (migration `0004`): `id`, `user_id` (FK, cascade), `title`, `company`, `description` (untrusted text), `source_url`, `status` (`saved|parsed|failed`), `description_sha256`, timestamps; indexed by `(user_id, created_at)`. `job_analyses`: `id`, `job_id` (FK, cascade, unique: one current analysis per job), `user_id`, `parser` (`deterministic|deterministic+ai`), `provider`, `model`, `consent_external_ai`, `input_truncated`, `description_sha256`, `result` (JSON: the parse with a quote per item), `created_at`. `job_matches`: `id`, `job_id` (FK, cascade), `user_id`, `overall_score` (nullable), `confidence`, `scoring_config` (JSON), `evidence_used` (JSON identifiers and versions of the inputs), `result` (JSON: the deterministic `report` and the separate `ai_advice`), `ai_provider`, `ai_model`, `consent_external_ai`, `created_at`; indexed by `(job_id, created_at)`. Matches deliberately hold **no foreign keys to candidate data**, so they survive edits and deletions of the profile, resume and connected sources; they are removed only with the job or the user. See [JOB_MATCHING.md](JOB_MATCHING.md).
 
 `education`, `work_experience`, `projects` and `certifications` follow the same pattern as `skills`: a `profile_id` foreign key, a `position` column preserving user order, and their own descriptive columns.
 

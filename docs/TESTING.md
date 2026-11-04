@@ -65,6 +65,12 @@ Semantics under a race: exactly one request receives new tokens, the others rece
 | `test_auth_*.py`, `test_rate_limit.py` | registration, login, refresh, logout, current user, rate limiting |
 | `test_profile.py`, `test_isolation_and_security.py` | profile API and cross-user isolation, secret leakage |
 | `test_refresh_concurrency.py` | race conditions |
+| `test_job_models.py` | job tables: cascades, one analysis per job, matches independent of analyses |
+| `test_job_parser.py`, `samples_jobs.py` | deterministic job parsing, importance, alternatives, seniority |
+| `test_jobs_api.py` | job CRUD, validation, ownership, URL import and SSRF/restricted-site protection |
+| `test_job_ai_analysis.py` | AI enrichment: grounding, consent, failures, prompt-injection handling |
+| `test_matching_engine.py` | scoring maths, weights, boundaries, evidence rules, de-duplication, honesty rules |
+| `test_match_api.py`, `test_match_ai.py` | match API: sources, history preservation, privacy, isolation; AI advice safeguards |
 | `test_health.py`, `test_errors_and_logging.py` | health endpoints, error shape, logging |
 
 ## Warnings policy
