@@ -46,3 +46,9 @@ python_version = "3.12"
 strict = true
 files = ["app", "tests"]
 plugins = ["pydantic.mypy"]
+
+[tool.coverage.run]
+source = ["app"]
+# Async SQLAlchemy runs on greenlets and password hashing on threads; without
+# these, coverage silently under-reports the code executed there.
+concurrency = ["greenlet", "thread"]
