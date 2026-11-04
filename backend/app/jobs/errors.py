@@ -51,3 +51,11 @@ class JobPlatformNotSupportedError(AppError):
 class JobFetchError(AppError):
     status_code = status.HTTP_502_BAD_GATEWAY
     code = "job_fetch_failed"
+
+
+class JobParseError(AppError):
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    code = "job_parse_failed"
+
+    def __init__(self) -> None:
+        super().__init__("The job description could not be processed")

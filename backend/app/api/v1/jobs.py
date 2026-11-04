@@ -5,19 +5,28 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 
-from app.api.deps import CurrentUserDep, RateLimiterDep, SessionDep
+from app.ai.base import LLMProvider
+from app.api.deps import (
+    CurrentUserDep,
+    RateLimiterDep,
+    SessionDep,
+    SettingsDep,
+    get_llm_provider,
+)
 from app.api.v1.integrations import get_page_fetcher
 from app.integrations.portfolio.crawler import PageFetcher
 from app.jobs.schemas import JobAnalysisResult
 from app.models import JobAnalysis, JobDescription
 from app.models.enums import JobStatus
 from app.schemas.jobs import (
+    AnalyzeJobRequest,
     JobAnalysisResponse,
     JobCreate,
     JobResponse,
     JobSummary,
     JobUpdate,
 )
+from app.services.job_analysis import JobAnalysisRunner
 from app.services.jobs import JobService
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -30,6 +39,17 @@ def get_job_service(
 
 
 JobServiceDep = Annotated[JobService, Depends(get_job_service)]
+
+
+def get_analysis_runner(
+    session: SessionDep,
+    settings: SettingsDep,
+    provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+) -> JobAnalysisRunner:
+    return JobAnalysisRunner(session, provider, settings.ai_max_input_chars)
+
+
+AnalysisRunnerDep = Annotated[JobAnalysisRunner, Depends(get_analysis_runner)]
 
 
 def job_response(job: JobDescription) -> JobResponse:
@@ -122,3 +142,27 @@ async def get_job_analysis(
 ) -> JobAnalysisResponse:
     """The structured parse: every item quotes the sentence it came from."""
     return analysis_response(await service.get_analysis(user, job_id))
+
+
+@router.post("/{job_id}/analyze", response_model=JobAnalysisResponse)
+async def analyze_job(
+    job_id: uuid.UUID,
+    body: AnalyzeJobRequest,
+    user: CurrentUserDep,
+    runner: AnalysisRunnerDep,
+    limiter: RateLimiterDep,
+) -> JobAnalysisResponse:
+    """Re-run the parse, optionally enriched by the AI provider (``use_ai=true``).
+
+    The built-in parser always runs and needs no AI. With ``use_ai`` the model may add
+    items the parser missed, but only ones that quote the description; the rest are
+    dropped (``unverified_items_removed``). Errors: 503 ``ai_unavailable``, 403
+    ``ai_consent_required`` (external provider without ``allow_external_ai``), 502
+    ``invalid_ai_response``, 504 ``ai_timeout``, 429 ``ai_rate_limited``. On any error the
+    previous analysis is kept.
+    """
+    limiter.hit(f"job-analysis:user:{user.id}")
+    analysis = await runner.run(
+        user, job_id, use_ai=body.use_ai, allow_external_ai=body.allow_external_ai
+    )
+    return analysis_response(analysis)

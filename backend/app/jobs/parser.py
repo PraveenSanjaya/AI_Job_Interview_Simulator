@@ -430,3 +430,31 @@ def _warnings(parsed: ParsedJob) -> list[str]:
     if parsed.seniority.basis == "inferred_from_years":
         notes.append("The seniority level is inferred from years of experience, not stated.")
     return notes
+
+
+def cue_importance(text: str) -> Importance:
+    """Importance suggested by wording alone ("required", "nice to have"), if any."""
+    if _PREFERRED_CUES.search(text):
+        return "preferred"
+    if _REQUIRED_CUES.search(text):
+        return "required"
+    return "unspecified"
+
+
+class ImportanceIndex:
+    """Where each sentence of a description sits, so a quoted passage can be given the
+    importance that the description itself implies (section heading or wording)."""
+
+    def __init__(self, description: str) -> None:
+        self._entries: list[tuple[str, Importance, bool]] = []
+        for unit in _split_units(description):
+            importance, stated = _importance(unit.text, unit.section)
+            self._entries.append((" ".join(unit.text.split()).casefold(), importance, stated))
+
+    def of_quote(self, quote: str) -> tuple[Importance, bool]:
+        needle = " ".join(quote.split()).casefold()
+        for text, importance, stated in self._entries:
+            if needle and needle in text:
+                return importance, stated
+        importance = cue_importance(quote)
+        return importance, importance != "unspecified"

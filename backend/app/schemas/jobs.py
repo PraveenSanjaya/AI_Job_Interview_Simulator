@@ -96,3 +96,18 @@ class JobAnalysisResponse(BaseModel):
     input_truncated: bool
     created_at: datetime
     result: JobAnalysisResult
+
+
+class AnalyzeJobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    use_ai: bool = Field(
+        default=False,
+        description="Also ask the configured AI provider to find items the built-in parser "
+        "missed. Every AI item must quote the description and is dropped otherwise.",
+    )
+    allow_external_ai: bool = Field(
+        default=False,
+        description="Explicit consent, required when the AI provider is external, to send "
+        "the job text to it.",
+    )
