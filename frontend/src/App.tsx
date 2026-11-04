@@ -5,6 +5,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { EmptyState, PageHeader } from '@/components/ui';
 import { LoginPage, RegisterPage } from '@/pages/AuthPages';
 import { ConnectionsPage } from '@/pages/ConnectionsPage';
+import { JobDetailPage, JobsPage, NewJobPage } from '@/pages/JobsPages';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { ResumesPage } from '@/pages/ResumesPage';
 
@@ -40,6 +41,9 @@ export function App() {
           <Route path="profile" element={<ProfilePage />} />
           <Route path="resumes" element={<ResumesPage />} />
           <Route path="connections" element={<ConnectionsPage />} />
+          <Route path="jobs" element={<JobsPage />} />
+          <Route path="jobs/new" element={<NewJobPage />} />
+          <Route path="jobs/:jobId" element={<JobDetailPage />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>
