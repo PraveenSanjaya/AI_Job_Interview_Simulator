@@ -12,6 +12,10 @@ import sys
 from contextlib import closing
 from pathlib import Path
 
+import pytest
+
+from tests.conftest import POSTGRES_TEST_URL
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 EXPECTED_TABLES = {
     "users",
@@ -81,3 +85,48 @@ def test_migrations_require_database_url() -> None:
     result = run_alembic("", "upgrade", "head")
     assert result.returncode != 0
     assert "DATABASE_URL is not set" in result.stderr + result.stdout
+
+
+@pytest.mark.skipif(
+    POSTGRES_TEST_URL is None, reason="set TEST_DATABASE_URL to a PostgreSQL test database"
+)
+def test_migrations_apply_and_revert_on_postgresql() -> None:
+    """Runs the real migration on PostgreSQL: upgrade, drift check, downgrade."""
+    import asyncio
+
+    from sqlalchemy import inspect, text
+
+    from app.db.session import create_db_engine
+    from tests.conftest import _assert_disposable
+
+    assert POSTGRES_TEST_URL is not None
+    _assert_disposable(POSTGRES_TEST_URL)
+
+    async def tables() -> set[str]:
+        engine = create_db_engine(POSTGRES_TEST_URL)
+        try:
+            async with engine.begin() as connection:
+                return set(await connection.run_sync(lambda c: inspect(c).get_table_names()))
+        finally:
+            await engine.dispose()
+
+    async def wipe() -> None:
+        engine = create_db_engine(POSTGRES_TEST_URL)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(text("DROP SCHEMA public CASCADE"))
+                await connection.execute(text("CREATE SCHEMA public"))
+        finally:
+            await engine.dispose()
+
+    asyncio.run(wipe())
+    upgrade = run_alembic(POSTGRES_TEST_URL, "upgrade", "head")
+    assert upgrade.returncode == 0, upgrade.stderr
+    assert asyncio.run(tables()) - {"alembic_version"} == EXPECTED_TABLES
+
+    check = run_alembic(POSTGRES_TEST_URL, "check")
+    assert check.returncode == 0, check.stderr
+
+    downgrade = run_alembic(POSTGRES_TEST_URL, "downgrade", "base")
+    assert downgrade.returncode == 0, downgrade.stderr
+    assert asyncio.run(tables()) - {"alembic_version"} == set()
