@@ -32,6 +32,13 @@ One row per completed and verified feature. Hashes and results are copied from t
 | Isolation and security tests | Completed | 148 passed, 98% coverage | e3d3e24 | PraveenSanjaya |
 | API documentation | Completed | N/A (docs only) | ab260da | PraveenSanjaya |
 | Database design doc and README update | Completed | N/A (docs only) | 80e03bb | PraveenSanjaya |
+| Phase 2 development log update | Completed | N/A (docs only) | 4f49c7a | PraveenSanjaya |
+| Phase 2.1: registration enumeration fix (uniform 202) | Completed | 146 passed (SQLite) at commit time | 25ac865 | PraveenSanjaya |
+| Phase 2.1: API doc repair (previous commit emptied the file by mistake) | Completed | N/A (docs only) | 346f237 | PraveenSanjaya |
+| Phase 2.1: ResourceWarning fix (unclosed sqlite3 connection in test helper) | Completed | 150 passed, 0 warnings | 1a30e69 | PraveenSanjaya |
+| Phase 2.1: refresh rotation row lock and concurrency tests | Completed on SQLite; PostgreSQL cases written but **not run** | 155 passed, 5 skipped (PostgreSQL) | 61a3d35 | PraveenSanjaya |
+| Phase 2.1: PostgreSQL migration test (gated) | Written, **not run** | skipped without TEST_DATABASE_URL | 28cd26c | PraveenSanjaya |
+| Phase 2.1: testing guide and PostgreSQL runbook | Completed | N/A (docs only) | see `git log` | PraveenSanjaya |
 
 ## Notes
 
@@ -39,3 +46,5 @@ One row per completed and verified feature. Hashes and results are copied from t
 - Environment at start: Python 3.13.5, Node 22.19.0. Docker, PostgreSQL and Redis are not installed.
 - Phase 2 was verified against SQLite and in-process HTTP tests, plus a manual end-to-end run (Alembic migration, `uvicorn`, register, login and profile via `curl`) on a SQLite file. **PostgreSQL, Redis and Docker have never been run** in this environment, so PostgreSQL behaviour is unverified.
 - Rate limiting is in-memory and per process, not Redis-backed.
+- `origin/main` and local `main` were identical at the Phase 2.1 check (no divergence). No push was issued from this session; the reflog records no push, and the remote was updated by something else (possibly an editor auto-sync). Authorship does not identify who pushed.
+- Phase 2.1 PostgreSQL verification is **still pending**: Docker and PostgreSQL are not installed here and no embedded PostgreSQL wheel exists for Windows.
