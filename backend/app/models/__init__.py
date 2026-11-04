@@ -2,6 +2,7 @@
 
 from app.models.base import Base
 from app.models.integration import IntegrationAnalysis, IntegrationSource
+from app.models.job import JobAnalysis, JobDescription, JobMatch
 from app.models.profile import (
     Certification,
     Education,
@@ -19,6 +20,9 @@ __all__ = [
     "Education",
     "IntegrationAnalysis",
     "IntegrationSource",
+    "JobAnalysis",
+    "JobDescription",
+    "JobMatch",
     "Project",
     "RefreshToken",
     "Resume",

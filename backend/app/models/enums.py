@@ -27,6 +27,14 @@ class IntegrationKind(StrEnum):
     PORTFOLIO = "portfolio"
 
 
+class JobStatus(StrEnum):
+    """Processing status of a saved job description."""
+
+    SAVED = "saved"
+    PARSED = "parsed"
+    FAILED = "failed"
+
+
 class FailureStage(StrEnum):
     EXTRACTION = "extraction"
     ANALYSIS = "analysis"
