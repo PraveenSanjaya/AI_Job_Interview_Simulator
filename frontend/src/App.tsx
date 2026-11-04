@@ -4,6 +4,7 @@ import { GuestOnly, RequireAuth } from '@/auth/RequireAuth';
 import { AppShell } from '@/components/layout/AppShell';
 import { EmptyState, PageHeader } from '@/components/ui';
 import { LoginPage, RegisterPage } from '@/pages/AuthPages';
+import { ConnectionsPage } from '@/pages/ConnectionsPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { ResumesPage } from '@/pages/ResumesPage';
 
@@ -38,6 +39,7 @@ export function App() {
           <Route index element={<Home />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="resumes" element={<ResumesPage />} />
+          <Route path="connections" element={<ConnectionsPage />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>
