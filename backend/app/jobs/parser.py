@@ -98,8 +98,8 @@ _EDUCATION_PATTERNS: tuple[tuple[EducationLevel, re.Pattern[str]], ...] = (
     (
         "bachelor",
         re.compile(
-            r"\b(bachelor'?s?|bachelors|b\.?sc\.?|b\.?tech|b\.s\.|b\.a\.|b\.?eng\.?|bs|ba)\b"
-            r"(?=\s*(?:\(|degree|in|of|,|/|or|$|\.))",
+            r"\b(bachelor'?s?|bachelors|b\.?sc\.?|b\.?tech|b\.s\.|b\.a\.|b\.?eng\.?)\b"
+            r"|\b(bs|ba)\b(?=\s*(?:\(|degree|in|of|,|/|or|$|\.))",
             re.IGNORECASE,
         ),
     ),
@@ -248,6 +248,7 @@ def _merge_skill(store: dict[str, JobSkill], skill: JobSkill) -> None:
     if existing is None:
         store[skill.name] = skill
         return
+    existing.context_only = existing.context_only and skill.context_only
     if _RANK[skill.importance] > _RANK[existing.importance]:
         existing.importance = skill.importance
         existing.importance_stated = skill.importance_stated
@@ -331,6 +332,14 @@ def _seniority(title: str, units: list[_Unit], overall_years: int | None) -> Job
     return JobSeniority()
 
 
+def education_level(text: str) -> EducationLevel | None:
+    """The highest education level named in ``text`` (a degree title), if any."""
+    for level, pattern in _EDUCATION_PATTERNS:
+        if pattern.search(text):
+            return level
+    return None
+
+
 def parse_job(title: str, description: str) -> ParsedJob:
     """Parse a job description. Pure and deterministic."""
     units = _split_units(description)
@@ -357,6 +366,7 @@ def parse_job(title: str, description: str) -> ParsedJob:
                     importance=importance,
                     importance_stated=stated,
                     quote=_quote(unit.text),
+                    context_only=unit.section == "other",
                     alternatives=groups.get(entry.name, []),
                 ),
             )

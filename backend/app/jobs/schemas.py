@@ -52,6 +52,9 @@ class JobSkill(_Model):
     importance_stated: bool = False
     source: Source = "text"
     quote: Quote = None
+    # True when every mention is in a company-context section ("About us", benefits):
+    # it describes the employer's stack, not something the candidate is asked to have.
+    context_only: bool = False
     # Other skills offered as interchangeable ("Python or Java"); one of them suffices.
     alternatives: list[str] = Field(default_factory=list)
 
@@ -121,7 +124,16 @@ class ParsedJob(_Model):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def unspecified_importance_skills(self) -> list[str]:
-        return [s.name for s in self.technical_skills if s.importance == "unspecified"]
+        return [
+            s.name
+            for s in self.technical_skills
+            if s.importance == "unspecified" and not s.context_only
+        ]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def company_context_skills(self) -> list[str]:
+        return [s.name for s in self.technical_skills if s.context_only]
 
     @computed_field  # type: ignore[prop-decorator]
     @property

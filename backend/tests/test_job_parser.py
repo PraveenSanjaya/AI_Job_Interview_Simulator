@@ -197,3 +197,26 @@ def test_control_characters_and_windows_newlines_are_handled() -> None:
     text = "Requirements\r\n- Python\x00 and Docker\r\n"
     parsed = parse_job("Dev", text)
     assert set(parsed.required_technical_skills) == {"Python", "Docker"}
+
+
+def test_skills_mentioned_only_in_company_sections_are_flagged_as_context() -> None:
+    parsed = parse_job("Senior Backend Engineer", BACKEND_JOB)
+    assert skill(parsed, "Kubernetes").context_only is True
+    assert set(parsed.company_context_skills) == {"Kubernetes", "Kafka"}
+    assert "Kubernetes" not in parsed.unspecified_importance_skills
+    assert skill(parsed, "Python").context_only is False
+
+
+def test_a_skill_also_required_elsewhere_is_not_context_only() -> None:
+    text = "About us\nWe use Docker.\n\nRequirements\n- Docker\n"
+    assert skill(parse_job("Dev", text), "Docker").context_only is False
+
+
+def test_education_level_of_degree_titles() -> None:
+    from app.jobs.parser import education_level
+
+    assert education_level("BSc Computer Science") == "bachelor"
+    assert education_level("MSc") == "master"
+    assert education_level("PhD") == "doctorate"
+    assert education_level("Diploma in IT") == "associate"
+    assert education_level("Basket weaving") is None
