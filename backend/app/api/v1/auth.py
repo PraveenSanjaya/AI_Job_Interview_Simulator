@@ -4,7 +4,7 @@ import hashlib
 
 from fastapi import APIRouter, status
 
-from app.api.deps import AuthServiceDep, ClientIpDep, RateLimiterDep
+from app.api.deps import AuthServiceDep, ClientIpDep, CurrentUserDep, RateLimiterDep
 from app.schemas.auth import (
     LoginRequest,
     LogoutRequest,
@@ -67,3 +67,9 @@ async def logout(
     """Revoke the session for this refresh token. Always 204 (idempotent)."""
     limiter.hit(f"logout:ip:{ip}")
     await service.logout(body.refresh_token)
+
+
+@router.get("/me", response_model=UserResponse)
+async def me(user: CurrentUserDep) -> UserResponse:
+    """The authenticated user's account."""
+    return UserResponse.model_validate(user)
