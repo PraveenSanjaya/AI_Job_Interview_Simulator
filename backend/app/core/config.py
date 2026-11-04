@@ -57,6 +57,16 @@ class Settings(BaseSettings):
     ai_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
     ai_max_input_chars: int = Field(default=30_000, ge=1000, le=200_000)
 
+    # Public-source integrations (no credentials required). GITHUB_TOKEN is optional and
+    # only raises the API rate limit for reading public data.
+    github_api_base_url: str = "https://api.github.com"
+    github_token: SecretStr | None = None
+    github_max_repos: int = Field(default=100, ge=1, le=100)
+    github_readme_repos: int = Field(default=5, ge=0, le=10)
+    integration_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    integration_max_response_bytes: int = Field(default=1_000_000, ge=10_000, le=5_000_000)
+    portfolio_max_pages: int = Field(default=5, ge=1, le=10)
+
     # Document storage. "local" writes under local_storage_path (must not be served by a
     # web server); "s3" is reserved for a later phase and rejected at startup.
     storage_backend: Literal["local", "s3"] = "local"
@@ -66,7 +76,9 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     backend_url: str = "http://localhost:8000"
 
-    @field_validator("database_url", "redis_url", "openai_api_key", "openai_model", mode="before")
+    @field_validator(
+        "database_url", "redis_url", "openai_api_key", "openai_model", "github_token", mode="before"
+    )
     @classmethod
     def _empty_to_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():

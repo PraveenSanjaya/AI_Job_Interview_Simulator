@@ -1,6 +1,7 @@
 """Import every model so that ``Base.metadata`` is complete (used by Alembic)."""
 
 from app.models.base import Base
+from app.models.integration import IntegrationAnalysis, IntegrationSource
 from app.models.profile import (
     Certification,
     Education,
@@ -16,6 +17,8 @@ __all__ = [
     "Base",
     "Certification",
     "Education",
+    "IntegrationAnalysis",
+    "IntegrationSource",
     "Project",
     "RefreshToken",
     "Resume",

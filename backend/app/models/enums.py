@@ -22,6 +22,11 @@ class ResumeStatus(StrEnum):
     FAILED = "failed"
 
 
+class IntegrationKind(StrEnum):
+    GITHUB = "github"
+    PORTFOLIO = "portfolio"
+
+
 class FailureStage(StrEnum):
     EXTRACTION = "extraction"
     ANALYSIS = "analysis"

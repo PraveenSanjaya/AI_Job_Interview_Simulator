@@ -13,6 +13,7 @@ from app.models.enums import UserRole
 from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin, str_enum, utcnow
 
 if TYPE_CHECKING:
+    from app.models.integration import IntegrationSource
     from app.models.profile import UserProfile
     from app.models.resume import Resume
 
@@ -35,6 +36,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
     resumes: Mapped[list["Resume"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", lazy="raise"
+    )
+    integration_sources: Mapped[list["IntegrationSource"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
 

@@ -28,6 +28,8 @@ EXPECTED_TABLES = {
     "certifications",
     "resumes",
     "resume_analyses",
+    "integration_sources",
+    "integration_analyses",
 }
 
 

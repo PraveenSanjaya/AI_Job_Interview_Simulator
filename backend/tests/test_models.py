@@ -198,3 +198,40 @@ async def test_resume_storage_key_must_be_unique(session: AsyncSession) -> None:
         )
     with pytest.raises(IntegrityError):
         await session.commit()
+
+
+async def test_integration_models_cascade_and_uniqueness(session: AsyncSession) -> None:
+    from app.models import IntegrationAnalysis, IntegrationSource
+    from app.models.enums import IntegrationKind
+
+    user = make_user()
+    session.add(user)
+    await session.flush()
+    github = IntegrationSource(
+        user_id=user.id, kind=IntegrationKind.GITHUB, source_ref="octocat", snapshot={"a": 1}
+    )
+    session.add(github)
+    await session.flush()
+    session.add(
+        IntegrationAnalysis(
+            user_id=user.id,
+            github_source_id=github.id,
+            provider="t",
+            model="m",
+            consent_external_ai=False,
+            result={},
+        )
+    )
+    await session.commit()
+    assert github.fetched_at.tzinfo is not None
+
+    session.add(
+        IntegrationSource(user_id=user.id, kind=IntegrationKind.GITHUB, source_ref="x", snapshot={})
+    )
+    with pytest.raises(IntegrityError):  # one source per kind per user
+        await session.commit()
+    await session.rollback()
+
+    await session.execute(IntegrationSource.__table__.delete())  # type: ignore[attr-defined]
+    await session.commit()
+    assert await count(session, IntegrationAnalysis) == 0  # derived data goes with its source
