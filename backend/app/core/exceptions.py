@@ -8,7 +8,7 @@ Internal error details (stack traces, exception text) are logged, never returned
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -62,17 +62,17 @@ def _error_response(
 
 
 async def _handle_app_error(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, AppError)
+    exc = cast(AppError, exc)
     return _error_response(request, exc.status_code, exc.code, exc.message)
 
 
 async def _handle_http_exception(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, StarletteHTTPException)
+    exc = cast(StarletteHTTPException, exc)
     return _error_response(request, exc.status_code, "http_error", str(exc.detail))
 
 
 async def _handle_validation_error(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, RequestValidationError)
+    exc = cast(RequestValidationError, exc)
     details = [
         {"location": [str(part) for part in err["loc"]], "message": err["msg"], "type": err["type"]}
         for err in exc.errors()
