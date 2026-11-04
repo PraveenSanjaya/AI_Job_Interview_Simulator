@@ -54,6 +54,18 @@ One row per completed and verified feature. Hashes and results are copied from t
 | Phase 3: end-to-end security tests | Completed | 393 passed | e45ff7a | PraveenSanjaya |
 | Phase 3: resume API and security documentation | Completed | N/A (docs only) | 90cfcdb | PraveenSanjaya |
 | Phase 3: README and database design update | Completed | N/A (docs only) | bc79178 | PraveenSanjaya |
+| Phase 3 development log update | Completed | N/A (docs only) | 72f4430 | PraveenSanjaya |
+| Phase 4: integration source/analysis models, migration 0003, settings | Completed on SQLite; PostgreSQL SQL generated only | 394 passed (suite at commit time) | ce9415f | PraveenSanjaya |
+| Phase 4: GitHub client (public REST, no credentials) and snapshot builder | Completed | 452 passed (suite at commit time) | e243b58 | PraveenSanjaya |
+| Phase 4: GitHub integration API | Completed | 472 passed (suite at commit time) | 19b03fc | PraveenSanjaya |
+| Phase 4: SSRF-hardened web page fetcher | Completed | 588 passed (suite at commit time) | 992b87c | PraveenSanjaya |
+| Phase 4: portfolio extraction and bounded same-host crawler | Completed | 603 passed (suite at commit time) | bc1ccf0 | PraveenSanjaya |
+| Phase 4: portfolio integration API | Completed | 632 passed (suite at commit time) | a1b8dc5 | PraveenSanjaya |
+| Phase 4: structured AI analysis of connected sources | Completed | 655 passed (suite at commit time) | fcb36bb | PraveenSanjaya |
+| Phase 4: integration analysis API (consent, profile approval) | Completed | 686 passed (suite at commit time) | c4af643 | PraveenSanjaya |
+| Phase 4: end-to-end integration security tests | Completed | 696 passed | a953415 | PraveenSanjaya |
+| Phase 4: integrations documentation and API reference | Completed | N/A (docs only) | 735737f | PraveenSanjaya |
+| Phase 4: README and database design update | Completed | N/A (docs only) | 39f065f | PraveenSanjaya |
 
 ## Notes
 
@@ -66,3 +78,5 @@ One row per completed and verified feature. Hashes and results are copied from t
 - Phase 3 was verified with SQLite, scripted fake AI providers and a mocked HTTP endpoint, plus a manual end-to-end run on a real `uvicorn` server (migration, register, login, TXT upload, `analyze` returning `503 ai_unavailable` with no provider, `.exe` upload rejected, delete removing the stored file). **No real AI provider was ever called**, so extraction quality and prompt-injection resistance of a real model are unverified. **PostgreSQL, Redis and Docker are still unverified.**
 - `8b64290` was committed while one unrelated test was failing (a test used `OPENAI_API_KEY` as its "unknown variable"); it was repaired in `25889a1`. Later commits were gated on a green suite.
 - Known gap: deleting a user does not delete their stored resume files (no account-deletion flow yet). Documented in `docs/RESUME_PROCESSING.md`.
+- Phase 4 verification: SQLite and in-process HTTP tests with fake GitHub/AI/DNS/web transports, plus a manual run on a real `uvicorn` server that made **real external calls**: one unauthenticated read-only GitHub API request set for the public account `octocat` (8 repositories, 4 READMEs), and one real HTTPS fetch of `https://example.com/` through the pinned-IP connection with the original host name as SNI (succeeded, title "Example Domain"). Seven internal-target URLs (metadata address, localhost, loopback v4/v6, decimal-encoded 127.0.0.1, 10.0.0.1, `file://`) were rejected with 422 by the real server. **No real AI provider was called.** PostgreSQL, Redis and Docker remain unverified.
+- Git synchronisation finding (Phase 4): the remote `main` is updated by account `PraveenSanjaya` roughly 10-90 seconds after each local commit (GitHub activity API). No git hook, push config or session command explains it; the reflog shows no push from this session. A git-ignored workspace `.vscode/settings.json` disabling post-commit push and auto-fetch was added but pushes continued, so the cause is elsewhere (an editor extension, another tool, or user-level configuration). Not resolved.
