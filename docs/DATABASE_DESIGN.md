@@ -61,7 +61,7 @@ erDiagram
 ## Design decisions
 
 - **UUID primary keys** everywhere (generated in Python, so they are available before flush).
-- **Ownership**: every row is reachable only through `users.id`, via `user_profiles.user_id` or `refresh_tokens.user_id`. All foreign keys use `ON DELETE CASCADE`, so deleting a user removes all of their data (supports the privacy requirement). This is covered by tests, including a plain SQL delete with no ORM involvement.
+- **Ownership**: every row is reachable only through `users.id`, via `user_profiles.user_id` or `refresh_tokens.user_id`. All foreign keys use `ON DELETE CASCADE`, so deleting a user removes all of their **database rows** (supports the privacy requirement). This is covered by tests, including a plain SQL delete with no ORM involvement. Uploaded resume **files** live outside the database and are not removed by a database cascade; an account-deletion flow must delete them through the storage service first (known gap, see [RESUME_PROCESSING.md](RESUME_PROCESSING.md)).
 - **Passwords and tokens**: only an Argon2id hash of the password and a SHA-256 digest of each refresh token are stored.
 - **Refresh token families**: `family_id` groups the tokens issued from one login. A reused (already revoked) token revokes the whole family.
 - **Emails** are stored trimmed and lower-cased with a unique index, so uniqueness is case-insensitive on every database.

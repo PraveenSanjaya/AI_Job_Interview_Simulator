@@ -38,7 +38,22 @@ One row per completed and verified feature. Hashes and results are copied from t
 | Phase 2.1: ResourceWarning fix (unclosed sqlite3 connection in test helper) | Completed | 150 passed, 0 warnings | 1a30e69 | PraveenSanjaya |
 | Phase 2.1: refresh rotation row lock and concurrency tests | Completed on SQLite; PostgreSQL cases written but **not run** | 155 passed, 5 skipped (PostgreSQL) | 61a3d35 | PraveenSanjaya |
 | Phase 2.1: PostgreSQL migration test (gated) | Written, **not run** | skipped without TEST_DATABASE_URL | 28cd26c | PraveenSanjaya |
-| Phase 2.1: testing guide and PostgreSQL runbook | Completed | N/A (docs only) | see `git log` | PraveenSanjaya |
+| Phase 2.1: testing guide and PostgreSQL runbook | Completed | N/A (docs only) | c183ceb | PraveenSanjaya |
+| Phase 2.1 development log update | Completed | N/A (docs only) | ad2ef15 | PraveenSanjaya |
+| Phase 3: resume processing dependencies | Completed | imports verified | b223115 | PraveenSanjaya |
+| Phase 3: secure storage service (local adapter, S3 reserved) | Completed | 17 storage tests | c118cfe | PraveenSanjaya |
+| Phase 3: content-based upload validation | Completed | 45 validation tests | 6b1c9c8 | PraveenSanjaya |
+| Phase 3: PDF/DOCX/TXT extraction (OCR-required detection) | Completed | 17 extraction tests | 645c551 | PraveenSanjaya |
+| Phase 3: resume models and migration 0002 | Completed on SQLite; PostgreSQL SQL generated only | migration up/down/drift on SQLite | 85ef456 | PraveenSanjaya |
+| Phase 3: authenticated resume uploads | Completed | 266 passed (suite at commit time) | e32829b | PraveenSanjaya |
+| Phase 3: AI provider abstraction | Completed (committed with one failing test, fixed in 25889a1) | provider tests passed | 8b64290 | PraveenSanjaya |
+| Phase 3: fix test broken by OPENAI_API_KEY becoming a setting | Completed | 289 passed | 25889a1 | PraveenSanjaya |
+| Phase 3: structured CV analysis service | Completed | 334 passed (suite at commit time) | f6a8164 | PraveenSanjaya |
+| Phase 3: resume analysis API | Completed | 358 passed (suite at commit time) | 3200bd0 | PraveenSanjaya |
+| Phase 3: user-approved profile updates | Completed | 384 passed (suite at commit time) | fa16cbe | PraveenSanjaya |
+| Phase 3: end-to-end security tests | Completed | 393 passed | e45ff7a | PraveenSanjaya |
+| Phase 3: resume API and security documentation | Completed | N/A (docs only) | 90cfcdb | PraveenSanjaya |
+| Phase 3: README and database design update | Completed | N/A (docs only) | bc79178 | PraveenSanjaya |
 
 ## Notes
 
@@ -48,3 +63,6 @@ One row per completed and verified feature. Hashes and results are copied from t
 - Rate limiting is in-memory and per process, not Redis-backed.
 - `origin/main` and local `main` were identical at the Phase 2.1 check (no divergence). No push was issued from this session; the reflog records no push, and the remote was updated by something else (possibly an editor auto-sync). Authorship does not identify who pushed.
 - Phase 2.1 PostgreSQL verification is **still pending**: Docker and PostgreSQL are not installed here and no embedded PostgreSQL wheel exists for Windows.
+- Phase 3 was verified with SQLite, scripted fake AI providers and a mocked HTTP endpoint, plus a manual end-to-end run on a real `uvicorn` server (migration, register, login, TXT upload, `analyze` returning `503 ai_unavailable` with no provider, `.exe` upload rejected, delete removing the stored file). **No real AI provider was ever called**, so extraction quality and prompt-injection resistance of a real model are unverified. **PostgreSQL, Redis and Docker are still unverified.**
+- `8b64290` was committed while one unrelated test was failing (a test used `OPENAI_API_KEY` as its "unknown variable"); it was repaired in `25889a1`. Later commits were gated on a green suite.
+- Known gap: deleting a user does not delete their stored resume files (no account-deletion flow yet). Documented in `docs/RESUME_PROCESSING.md`.
