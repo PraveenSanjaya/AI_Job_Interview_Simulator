@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     integration_max_response_bytes: int = Field(default=1_000_000, ge=10_000, le=5_000_000)
     portfolio_max_pages: int = Field(default=5, ge=1, le=10)
 
+    # Job matching. Optional overrides of the default scoring weights by dimension name,
+    # as JSON, e.g. MATCH_WEIGHTS='{"required_skills": 0.5, "education": 0.0}'. Validated at
+    # startup; individual match requests may override them again.
+    match_weights: dict[str, float] | None = None
+
     # Document storage. "local" writes under local_storage_path (must not be served by a
     # web server); "s3" is reserved for a later phase and rejected at startup.
     storage_backend: Literal["local", "s3"] = "local"
@@ -75,6 +80,15 @@ class Settings(BaseSettings):
 
     frontend_url: str = "http://localhost:5173"
     backend_url: str = "http://localhost:8000"
+
+    @field_validator("match_weights", mode="after")
+    @classmethod
+    def _valid_match_weights(cls, value: dict[str, float] | None) -> dict[str, float] | None:
+        if value is not None:
+            from app.matching.config import ScoringWeights
+
+            ScoringWeights(**value)  # raises a clear error for unknown names or bad values
+        return value
 
     @field_validator(
         "database_url", "redis_url", "openai_api_key", "openai_model", "github_token", mode="before"

@@ -2,11 +2,13 @@
 
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.jobs.schemas import JobAnalysisResult
+from app.matching.config import ScoringConfig
+from app.matching.report import MatchReport, ScoreStatus
 from app.models.enums import JobStatus
 
 MAX_DESCRIPTION_CHARS = 30_000
@@ -111,3 +113,43 @@ class AnalyzeJobRequest(BaseModel):
         description="Explicit consent, required when the AI provider is external, to send "
         "the job text to it.",
     )
+
+
+class MatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    resume_id: uuid.UUID | None = Field(
+        default=None,
+        description="An analysed resume to use. Omit to use your newest analysed resume.",
+    )
+    include: list[Literal["resume", "github", "portfolio"]] | None = Field(
+        default=None,
+        max_length=3,
+        description="Evidence sources to use besides your profile; omit for every one that "
+        "is available. Naming one that is not available is an error.",
+    )
+    weights: dict[str, float] | None = Field(
+        default=None,
+        description="Optional scoring weight overrides by dimension name (see the API "
+        "documentation). They apply to this match only and are stored with it.",
+    )
+
+
+class MatchSummary(BaseModel):
+    id: uuid.UUID
+    job_id: uuid.UUID
+    created_at: datetime
+    overall_score: int | None
+    score_status: ScoreStatus
+    confidence: str
+
+
+class MatchResponse(BaseModel):
+    id: uuid.UUID
+    job_id: uuid.UUID
+    created_at: datetime
+    overall_score: int | None
+    confidence: str
+    scoring_config: ScoringConfig
+    evidence_used: dict[str, Any]
+    report: MatchReport

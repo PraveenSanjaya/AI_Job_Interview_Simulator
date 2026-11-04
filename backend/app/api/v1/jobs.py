@@ -16,7 +16,9 @@ from app.api.deps import (
 from app.api.v1.integrations import get_page_fetcher
 from app.integrations.portfolio.crawler import PageFetcher
 from app.jobs.schemas import JobAnalysisResult
-from app.models import JobAnalysis, JobDescription
+from app.matching.config import ScoringConfig
+from app.matching.report import MatchReport
+from app.models import JobAnalysis, JobDescription, JobMatch
 from app.models.enums import JobStatus
 from app.schemas.jobs import (
     AnalyzeJobRequest,
@@ -25,9 +27,13 @@ from app.schemas.jobs import (
     JobResponse,
     JobSummary,
     JobUpdate,
+    MatchRequest,
+    MatchResponse,
+    MatchSummary,
 )
 from app.services.job_analysis import JobAnalysisRunner
 from app.services.jobs import JobService
+from app.services.matching import MatchService
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -50,6 +56,13 @@ def get_analysis_runner(
 
 
 AnalysisRunnerDep = Annotated[JobAnalysisRunner, Depends(get_analysis_runner)]
+
+
+def get_match_service(session: SessionDep, settings: SettingsDep) -> MatchService:
+    return MatchService(session, settings)
+
+
+MatchServiceDep = Annotated[MatchService, Depends(get_match_service)]
 
 
 def job_response(job: JobDescription) -> JobResponse:
@@ -166,3 +179,63 @@ async def analyze_job(
         user, job_id, use_ai=body.use_ai, allow_external_ai=body.allow_external_ai
     )
     return analysis_response(analysis)
+
+
+# --------------------------------------------------------------------- matching
+
+
+def match_response(match: JobMatch) -> MatchResponse:
+    return MatchResponse(
+        id=match.id,
+        job_id=match.job_id,
+        created_at=match.created_at,
+        overall_score=match.overall_score,
+        confidence=match.confidence,
+        scoring_config=ScoringConfig.model_validate(match.scoring_config),
+        evidence_used=match.evidence_used,
+        report=MatchReport.model_validate(match.result["report"]),
+    )
+
+
+@router.post("/{job_id}/match", response_model=MatchResponse, status_code=status.HTTP_201_CREATED)
+async def create_match(
+    job_id: uuid.UUID,
+    body: MatchRequest,
+    user: CurrentUserDep,
+    service: MatchServiceDep,
+    limiter: RateLimiterDep,
+) -> MatchResponse:
+    """Compare your profile, analysed CV, GitHub and portfolio with this job.
+
+    The result is computed by fixed rules (no AI) and stored as a historical report: later
+    changes to your profile or sources never alter it. ``report.score.explanation`` shows
+    how the score was calculated and ``scoring_config`` the weights used. A missing skill
+    means *no evidence was found in the data on record*, not that you lack it. Nothing
+    here predicts a hiring decision.
+    """
+    limiter.hit(f"match:user:{user.id}")
+    return match_response(await service.run(user, job_id, body))
+
+
+@router.get("/{job_id}/matches", response_model=list[MatchSummary])
+async def list_matches(
+    job_id: uuid.UUID, user: CurrentUserDep, service: MatchServiceDep
+) -> list[MatchSummary]:
+    return [
+        MatchSummary(
+            id=m.id,
+            job_id=m.job_id,
+            created_at=m.created_at,
+            overall_score=m.overall_score,
+            score_status=m.result["report"]["score"]["status"],
+            confidence=m.confidence,
+        )
+        for m in await service.list_all(user, job_id)
+    ]
+
+
+@router.get("/{job_id}/matches/{match_id}", response_model=MatchResponse)
+async def get_match(
+    job_id: uuid.UUID, match_id: uuid.UUID, user: CurrentUserDep, service: MatchServiceDep
+) -> MatchResponse:
+    return match_response(await service.get(user, job_id, match_id))
