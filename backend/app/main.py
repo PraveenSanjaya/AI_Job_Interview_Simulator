@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from app.api import health
 from app.api.v1.router import api_router
+from app.core.body_limit import MaxBodySizeMiddleware
 from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
@@ -17,6 +18,7 @@ from app.db.session import create_db_engine, create_session_factory
 from app.storage import create_storage
 
 API_V1_PREFIX = "/api/v1"
+MULTIPART_OVERHEAD_BYTES = 64 * 1024  # boundaries and form fields around the file
 logger = logging.getLogger(__name__)
 
 
@@ -60,6 +62,12 @@ def create_app() -> FastAPI:
             "invalid on restart and are not shared between workers."
         )
     register_exception_handlers(app)
+    # Added before RequestContextMiddleware so that one runs outermost and sets the request id.
+    app.add_middleware(
+        MaxBodySizeMiddleware,
+        max_bytes=settings.max_upload_bytes + MULTIPART_OVERHEAD_BYTES,
+        path_prefix=f"{API_V1_PREFIX}/resumes",
+    )
     app.add_middleware(RequestContextMiddleware)
     app.include_router(health.router)
     app.include_router(api_router, prefix=API_V1_PREFIX)

@@ -40,3 +40,8 @@ def configure_logging(level: str = "INFO") -> None:
     root.setLevel(level)
     # Replace uvicorn's access log with our own request log line.
     logging.getLogger("uvicorn.access").disabled = True
+    # These libraries log at DEBUG with request/statement parameters, which would put
+    # resume filenames, emails and tokens into the logs. Never let LOG_LEVEL=DEBUG enable
+    # that. (SQL echo remains available explicitly via DATABASE_ECHO.)
+    for noisy in ("aiosqlite", "asyncpg", "httpx", "httpcore", "multipart", "python_multipart"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)

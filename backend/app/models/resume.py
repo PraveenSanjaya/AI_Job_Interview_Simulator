@@ -54,6 +54,10 @@ class Resume(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="resume", cascade="all, delete-orphan", uselist=False, lazy="selectin"
     )
 
+    @property
+    def has_analysis(self) -> bool:
+        return self.analysis is not None
+
 
 class ResumeAnalysis(UUIDPrimaryKeyMixin, Base):
     """The current analysis of a resume (re-analysis replaces it)."""

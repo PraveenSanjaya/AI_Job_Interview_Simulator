@@ -16,7 +16,7 @@ from pathlib import PurePosixPath
 
 from fastapi import status
 
-from app.core.exceptions import AppError
+from app.core.exceptions import AppError, PayloadTooLargeError
 
 MAX_ZIP_ENTRIES = 1000
 MAX_ZIP_UNCOMPRESSED_BYTES = 100 * 1024 * 1024  # zip-bomb guard for DOCX
@@ -44,8 +44,7 @@ class InvalidDocumentError(AppError):
     code = "invalid_document"
 
 
-class FileTooLargeError(AppError):
-    status_code = status.HTTP_413_CONTENT_TOO_LARGE
+class FileTooLargeError(PayloadTooLargeError):
     code = "file_too_large"
 
 
