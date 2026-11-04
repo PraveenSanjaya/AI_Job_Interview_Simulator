@@ -121,7 +121,7 @@ async def test_match_works_with_profile_only_and_no_ai_at_all(client: httpx.Asyn
     report = body["report"]
     assert report["score"]["score"] == body["overall_score"]
     assert report["score"]["explanation"].startswith(f"{body['overall_score']}/100 = ")
-    assert "ai_advice" not in body
+    assert body["ai_advice"] is None and body["ai_provider"] is None
     assert skill(report, "Python")["status"] == "supported"
     assert skill(report, "Docker")["status"] == "weakly_supported"
     assert skill(report, "PostgreSQL")["status"] == "supported"  # project technologies

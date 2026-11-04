@@ -14,7 +14,10 @@ from typing import Any
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.base import LLMProvider
 from app.ai.cv_schemas import CVAnalysisResult, ExtractedFacts
+from app.ai.errors import AIConsentRequiredError, AIUnavailableError
+from app.ai.match_advice import MatchAdviser
 from app.core.config import Settings
 from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.integrations.errors import SourceNotConnectedError
@@ -80,11 +83,13 @@ class MatchService:
         self,
         session: AsyncSession,
         settings: Settings,
+        provider: LLMProvider,
         *,
         today: Callable[[], date] = lambda: datetime.now(UTC).date(),
     ) -> None:
         self._session = session
         self._settings = settings
+        self._provider = provider
         self._today = today
         self._jobs = JobRepository(session)
         self._resumes = ResumeRepository(session)
@@ -149,6 +154,16 @@ class MatchService:
                 "and at least one above zero"
             ) from None
 
+        if data.use_ai:  # fail before reading any candidate data
+            if not self._provider.available:
+                raise AIUnavailableError("AI advice is not configured on this server")
+            if self._provider.is_external and not data.allow_external_ai:
+                raise AIConsentRequiredError(
+                    "A summary of this match (requirement names, statuses and scores; no "
+                    "name, contact details or project names) would be sent to an external AI "
+                    "service. Set allow_external_ai=true to explicitly consent."
+                )
+
         profile = await ProfileService(self._session).get(user)
         resume = await self._pick_resume(user, data)
         github_source = await self._source(user, IntegrationKind.GITHUB, data)
@@ -188,6 +203,14 @@ class MatchService:
             evidence=evidence,
             config=config,
         )
+        advice = None
+        if data.use_ai:
+            outcome = await MatchAdviser(self._provider).advise(
+                report,
+                list(profile.preferred_roles),
+                [statement.text for statement in parsed.responsibilities],
+            )  # may raise: nothing has been stored yet
+            advice = outcome.advice
         match = JobMatch(
             job_id=job.id,
             user_id=user.id,
@@ -197,7 +220,13 @@ class MatchService:
             evidence_used=self._evidence_used(
                 profile, resume, github_source, portfolio_source, job, analysis, report
             ),
-            result={"report": report.model_dump(mode="json")},
+            result={
+                "report": report.model_dump(mode="json"),
+                "ai_advice": advice.model_dump(mode="json") if advice else None,
+            },
+            ai_provider=self._provider.name if advice else None,
+            ai_model=self._provider.model if advice else None,
+            consent_external_ai=data.allow_external_ai if advice else False,
         )
         self._jobs.add_match(match)
         await self._session.commit()

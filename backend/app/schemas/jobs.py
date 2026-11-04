@@ -6,6 +6,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
+from app.ai.match_advice import MatchAdvice
 from app.jobs.schemas import JobAnalysisResult
 from app.matching.config import ScoringConfig
 from app.matching.report import MatchReport, ScoreStatus
@@ -133,6 +134,16 @@ class MatchRequest(BaseModel):
         description="Optional scoring weight overrides by dimension name (see the API "
         "documentation). They apply to this match only and are stored with it.",
     )
+    use_ai: bool = Field(
+        default=False,
+        description="Also ask the configured AI provider for plain-language advice. The "
+        "computed report never depends on it.",
+    )
+    allow_external_ai: bool = Field(
+        default=False,
+        description="Explicit consent, required when the AI provider is external, to send "
+        "a minimal summary of the report (no name, contact details or project names).",
+    )
 
 
 class MatchSummary(BaseModel):
@@ -153,3 +164,7 @@ class MatchResponse(BaseModel):
     scoring_config: ScoringConfig
     evidence_used: dict[str, Any]
     report: MatchReport
+    ai_advice: MatchAdvice | None = None
+    ai_provider: str | None = None
+    ai_model: str | None = None
+    consent_external_ai: bool = False

@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, status
 
 from app.ai.base import LLMProvider
+from app.ai.match_advice import MatchAdvice
 from app.api.deps import (
     CurrentUserDep,
     RateLimiterDep,
@@ -58,8 +59,12 @@ def get_analysis_runner(
 AnalysisRunnerDep = Annotated[JobAnalysisRunner, Depends(get_analysis_runner)]
 
 
-def get_match_service(session: SessionDep, settings: SettingsDep) -> MatchService:
-    return MatchService(session, settings)
+def get_match_service(
+    session: SessionDep,
+    settings: SettingsDep,
+    provider: Annotated[LLMProvider, Depends(get_llm_provider)],
+) -> MatchService:
+    return MatchService(session, settings, provider)
 
 
 MatchServiceDep = Annotated[MatchService, Depends(get_match_service)]
@@ -194,6 +199,14 @@ def match_response(match: JobMatch) -> MatchResponse:
         scoring_config=ScoringConfig.model_validate(match.scoring_config),
         evidence_used=match.evidence_used,
         report=MatchReport.model_validate(match.result["report"]),
+        ai_advice=(
+            MatchAdvice.model_validate(match.result["ai_advice"])
+            if match.result.get("ai_advice")
+            else None
+        ),
+        ai_provider=match.ai_provider,
+        ai_model=match.ai_model,
+        consent_external_ai=match.consent_external_ai,
     )
 
 
@@ -212,6 +225,12 @@ async def create_match(
     how the score was calculated and ``scoring_config`` the weights used. A missing skill
     means *no evidence was found in the data on record*, not that you lack it. Nothing
     here predicts a hiring decision.
+
+    With ``use_ai=true`` the configured AI provider also writes plain-language advice,
+    stored separately in ``ai_advice``; it never changes the computed report. Errors:
+    503 ``ai_unavailable``, 403 ``ai_consent_required`` (external provider without
+    ``allow_external_ai``), 502 ``invalid_ai_response``, 504 ``ai_timeout``, 429
+    ``ai_rate_limited``; on any of them no match is stored.
     """
     limiter.hit(f"match:user:{user.id}")
     return match_response(await service.run(user, job_id, body))

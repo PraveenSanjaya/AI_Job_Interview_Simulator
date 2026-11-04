@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from app.ai.openai_compat import UnavailableProvider
 from app.core.config import Settings, get_settings
 from app.core.exceptions import NotFoundError
 from app.core.rate_limit import InMemoryRateLimiter
@@ -59,6 +60,7 @@ def build_app(engine: AsyncEngine, settings: Settings, storage_root: Path) -> Fa
     application = create_app()
     application.state.storage = LocalStorage(storage_root)
     application.state.github_client = FakeGitHubClient()
+    application.state.llm_provider = UnavailableProvider()  # as in production with no AI set
     application.state.portfolio_fetcher = FakeWeb().fetcher()
     application.state.engine = engine
     application.state.session_factory = create_session_factory(engine)
