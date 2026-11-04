@@ -9,7 +9,7 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import NotFoundError
 from app.db.session import create_db_engine, create_session_factory
 from app.main import create_app
-from app.models.base import Base
+from app.models import Base  # importing the package registers every model
 
 
 @pytest.fixture
