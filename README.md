@@ -6,9 +6,9 @@ See [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md), [docs/ARCHITECTURE.md](docs/AR
 
 ## Status
 
-Implemented: backend foundation (Phase 1) and database, authentication and candidate profiles (Phase 2). Not implemented yet: frontend, resume/GitHub/portfolio analysis, AI interviews, RAG/memory, voice, Redis integration and email delivery (password reset, email verification).
+Implemented: backend foundation (Phase 1), database, authentication and candidate profiles (Phase 2), and resume upload, text extraction and AI CV analysis with user-approved profile updates (Phase 3). Not implemented yet: frontend, GitHub/portfolio analysis, AI interviews, RAG/memory, voice, OCR, S3 storage, Redis integration and email delivery (password reset, email verification).
 
-See [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md) and [docs/DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md).
+See [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md), [docs/DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md), [docs/RESUME_PROCESSING.md](docs/RESUME_PROCESSING.md) (security, privacy, retention) and [docs/TESTING.md](docs/TESTING.md).
 
 ## Backend setup
 
@@ -66,7 +66,13 @@ Settings are read from environment variables or a `.env` file (see `.env.example
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime |
 | `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime |
 | `RATE_LIMIT_ENABLED` | `true` | In-memory, per-process limiter |
-| `AUTH_RATE_LIMIT_ATTEMPTS` / `AUTH_RATE_LIMIT_WINDOW_SECONDS` | `10` / `60` | Auth endpoint limits |
+| `AUTH_RATE_LIMIT_ATTEMPTS` / `AUTH_RATE_LIMIT_WINDOW_SECONDS` | `10` / `60` | Limits for auth, upload and analysis endpoints |
+| `STORAGE_BACKEND` / `LOCAL_STORAGE_PATH` | `local` / `./storage` | Uploaded resumes. Keep the path outside any web root. `s3` is not implemented yet |
+| `MAX_UPLOAD_BYTES` | `5242880` | Maximum resume size |
+| `AI_PROVIDER` | `none` | `none` or `openai`. AI is optional; everything except analysis works without it |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | unset | Both required when `AI_PROVIDER=openai`. No default model is assumed |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint. `localhost` endpoints are treated as local (no consent prompt) |
+| `AI_TIMEOUT_SECONDS`, `AI_MAX_INPUT_CHARS` | `60`, `30000` | Provider timeout and maximum resume characters sent |
 
 Generate a secret with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 
@@ -90,11 +96,14 @@ backend/
   app/
     api/           # HTTP routers and dependencies (health.py, deps.py, v1/)
     core/          # config, logging, middleware, exceptions, passwords, tokens, rate limiting
+    ai/            # LLM provider abstraction, CV analysis, grounding, suggestions
     db/            # engine, session dependency, column types
+    documents/     # upload validation and PDF/DOCX/TXT text extraction
     models/        # SQLAlchemy models
     repositories/  # database access
     schemas/       # Pydantic request/response models
     services/      # business logic, independent of HTTP
+    storage/       # storage backends (local; S3 later)
   migrations/      # Alembic
   tests/
 ```

@@ -4,7 +4,7 @@ PostgreSQL is the intended production database, accessed through SQLAlchemy 2.x 
 
 > **Verification status.** Migrations and models are tested against SQLite only (a testing fallback). The PostgreSQL DDL is generated and inspected offline (`alembic upgrade head --sql`) but has **not** been executed against a PostgreSQL server in this environment. pgvector is not used yet and will be added by the feature that needs it.
 
-## Entities (Phase 2)
+## Entities (Phases 2-3)
 
 ```mermaid
 erDiagram
@@ -53,6 +53,8 @@ erDiagram
         int position
     }
 ```
+
+`resumes` (migration `0002`): `id`, `user_id` (FK, cascade), `display_name`, `file_format`, `size_bytes`, `sha256`, `storage_key` (unique), `status` (`uploaded|extracting|extracted|analyzing|completed|failed`), `failure_stage`, `error_code`, `error_message`, `page_count`, `char_count`, `word_count`, `extracted_at`, `analyzed_at`, timestamps; indexed by `(user_id, created_at)`. `resume_analyses`: `id`, `resume_id` (FK, cascade, unique: one current analysis per resume), `provider`, `model`, `consent_external_ai`, `input_truncated`, `result` (JSON: verified facts and AI assessment), `created_at`. Extracted text is deliberately not stored. See [RESUME_PROCESSING.md](RESUME_PROCESSING.md).
 
 `education`, `work_experience`, `projects` and `certifications` follow the same pattern as `skills`: a `profile_id` foreign key, a `position` column preserving user order, and their own descriptive columns.
 
