@@ -264,3 +264,76 @@ List (newest first, with `sources_used`), retrieve, and delete your analyses.
 ### POST `/integrations/analysis/{id}/apply-to-profile` → 200
 
 Same request, merge rules and response as `POST /resumes/{id}/apply-to-profile`: only the fields and sections you send are applied, existing profile data is preserved unless you explicitly choose `mode="replace"` or `overwrite_existing`, and skipped items are reported.
+
+## Jobs and matching
+
+All endpoints require a Bearer token and operate only on the caller's own data; another user's job, analysis or match behaves like a missing one (`404 job_not_found` / `match_not_found`). Design, scoring rules and privacy are described in [JOB_MATCHING.md](JOB_MATCHING.md). Creating, updating, analysing and matching are rate limited per user (per process).
+
+### POST `/jobs` → 201
+
+Body: `{"title": "…", "company": "…" | null, "description": "…" | null, "source_url": "…" | null}`. Provide `description` (40 to 30,000 characters) **or** a public `source_url` (then the text is read from that page through the SSRF-safe fetcher). When both are given the text is used and the link is only stored. Saving parses the job (no AI). Response: `{id, title, company, description, source_url, status, has_analysis, created_at, updated_at}`.
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 422 | `validation_error` | neither text nor link, empty title, unknown field, text over 30,000 characters |
+| 422 | `invalid_job_description` | text shorter than 40 characters |
+| 422 | `job_url_rejected` | scheme, port, credentials, internal or non-public host or redirect target (no request is made for syntactic rejections) |
+| 422 | `job_platform_not_supported` | the link is on a site that forbids automated access or needs a login (LinkedIn, Indeed, Glassdoor, …); paste the text instead |
+| 422 | `job_text_not_found` | the page has no readable text (for example it needs JavaScript) |
+| 502 | `portfolio_http_error` and other fetch codes | the page could not be retrieved; nothing is saved |
+
+### GET `/jobs` → 200, GET `/jobs/{id}` → 200
+
+List (newest first, without the text) and retrieve.
+
+### PUT `/jobs/{id}` → 200
+
+Changes only the fields sent (`title`, `company`, `description`, `source_url`; `company` and `source_url` may be `null` to clear them). Changing the title, text or link re-parses the job and discards an AI-enriched analysis; match reports already made are kept. A new `source_url` without `description` reads the text from the new link. `422` if the body is empty, the title or text would become empty, or the text is too short.
+
+### DELETE `/jobs/{id}` → 204
+
+Deletes the job, its analysis and all of its match reports.
+
+### POST `/jobs/{id}/analyze` → 200
+
+Body (all optional): `{"use_ai": false, "allow_external_ai": false}`. Re-runs the built-in parser; with `use_ai` the configured provider may add items the parser missed, each of which must quote the description. `allow_external_ai` is the explicit consent needed when the provider is external. On any error the previous analysis is kept.
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 503 | `ai_unavailable` | `use_ai` requested and no provider is configured |
+| 403 | `ai_consent_required` | external provider and no explicit consent; nothing was sent |
+| 502 / 504 / 429 | `invalid_ai_response` / `ai_timeout` / `ai_rate_limited` | AI failure |
+
+### GET `/jobs/{id}/analysis` → 200
+
+`{job_id, parser ("deterministic" | "deterministic+ai"), provider, model, consent_external_ai, input_truncated, created_at, result}` where `result.parsed` holds `technical_skills` (each with `name`, `kind`, `importance` `required|preferred|unspecified`, `importance_stated`, `source` `text|ai`, `quote`, `context_only`, `alternatives`), `soft_skills`, `certifications`, `domain_knowledge`, `education`, `experience`, `responsibilities`, `qualifications`, `seniority` (`level`, `basis` `stated|inferred_from_years|not_found`), `warnings`, and the derived lists `required_technical_skills`, `preferred_technical_skills`, `unspecified_importance_skills`, `company_context_skills`, `programming_languages`, `frameworks_and_tools`, `overall_min_years`. `result.unverified_items_removed` counts AI items that could not be verified. `404 analysis_not_found` if the job has none (for example its status is `failed`).
+
+### POST `/jobs/{id}/match` → 201
+
+Body (all optional): `{"resume_id": null, "include": ["resume","github","portfolio"], "weights": {"required_skills": 0.5}, "use_ai": false, "allow_external_ai": false}`.
+
+* `resume_id`: an analysed resume of yours; omit for your newest analysed one.
+* `include`: evidence sources besides the profile; omit for every available one. Naming one that is unavailable is an error.
+* `weights`: per-request overrides of the scoring weights (`required_skills`, `preferred_skills`, `experience`, `education`, `project_relevance`, `technology_alignment`, `evidence_strength`; 0 to 100, at least one above 0).
+* `use_ai`: also request plain-language advice (stored apart from the report).
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 404 | `job_not_found` / `resume_not_found` / `source_not_connected` | not yours or not available |
+| 409 | `job_not_analyzed` | the job has no usable analysis; re-run analyze |
+| 409 | `resume_not_analyzed` | the chosen (or an explicitly included) resume has no analysis |
+| 422 | `invalid_scoring_weights` | unknown dimension, negative or out-of-range value, or all zero |
+| 503 / 403 / 502 / 504 / 429 | AI codes as above | only with `use_ai`; no match is stored |
+
+Response: `{id, job_id, created_at, overall_score (0-100 or null), confidence, scoring_config, evidence_used, report, ai_advice, ai_provider, ai_model, consent_external_ai}`.
+
+* `report.score`: `score`, `status` (`scored` | `insufficient_evidence` | `insufficient_job_detail`), `confidence`, `formula`, `explanation`, and `dimensions[]` with `weight`, `effective_weight`, `value`, `points`, `applicable`.
+* `report.required_skills` / `preferred_skills`: counts, `coverage`, and `items[]` with `status` (`supported` | `weakly_supported` | `not_found` | `unknown`), `credit`, `independent_evidence`, `evidence[]` (`{source: profile|resume|github|portfolio, kind, ref}`), `job_quote`, `satisfied_via`, `unchecked_sources`, `note`.
+* Also `technical_strengths`, `experience`, `education`, `project_relevance`, `soft_skills`, `certifications`, `missing_requirements`, `weakly_supported_requirements`, `unverifiable_requirements`, `evidence_by_source`, `sources`, `improvement_areas`, `preparation_topics`, `caveats`, `disclaimer`.
+* `ai_advice` (or `null`): AI-generated `summary`, `improvement_areas`, `learning_topics`, `project_ideas`, `interview_preparation`, `caveats`, `notice`, `unverified_items_removed`. It never alters `report`.
+
+A report is a stored snapshot: it does not change when the profile, CV, GitHub, portfolio or the job change later.
+
+### GET `/jobs/{id}/matches` → 200, GET `/jobs/{id}/matches/{match_id}` → 200
+
+List (newest first: `id`, `job_id`, `created_at`, `overall_score`, `score_status`, `confidence`) and retrieve a stored match exactly as it was created.
