@@ -6,9 +6,22 @@ See [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md), [docs/ARCHITECTURE.md](docs/AR
 
 ## Status
 
-Implemented: backend foundation (Phase 1), database, authentication and candidate profiles (Phase 2), resume upload, text extraction and AI CV analysis with user-approved profile updates (Phase 3), GitHub profile and portfolio-website analysis with SSRF-hardened fetching (Phase 4), job description analysis with explainable candidate-to-job matching (Phase 5), and text-based AI mock interviews with follow-ups, evaluation and reports (Phase 6). Not implemented yet: frontend, voice, RAG/memory, voice, OCR, S3 storage, Redis integration and email delivery (password reset, email verification).
+Implemented: backend foundation (Phase 1), database, authentication and candidate profiles (Phase 2), resume upload, text extraction and AI CV analysis with user-approved profile updates (Phase 3), GitHub profile and portfolio-website analysis with SSRF-hardened fetching (Phase 4), job description analysis with explainable candidate-to-job matching (Phase 5), text-based AI mock interviews with follow-ups, evaluation and reports (Phase 6), and a React frontend covering all of the above (Phase 7). Not implemented yet: voice, RAG/memory, OCR, S3 storage, Redis integration and email delivery (password reset, email verification).
 
-See [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md), [docs/DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md), [docs/RESUME_PROCESSING.md](docs/RESUME_PROCESSING.md) and [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) and [docs/JOB_MATCHING.md](docs/JOB_MATCHING.md) and [docs/INTERVIEWS.md](docs/INTERVIEWS.md) (security, privacy, retention, scoring) and [docs/TESTING.md](docs/TESTING.md).
+See [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md), [docs/DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md), [docs/RESUME_PROCESSING.md](docs/RESUME_PROCESSING.md) and [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) and [docs/JOB_MATCHING.md](docs/JOB_MATCHING.md) and [docs/INTERVIEWS.md](docs/INTERVIEWS.md) (security, privacy, retention, scoring) and [docs/FRONTEND.md](docs/FRONTEND.md) and [docs/TESTING.md](docs/TESTING.md).
+
+## Frontend
+
+React + TypeScript + Vite app in `frontend/` (needs Node 20+). With the backend running on port 8000:
+
+```bash
+cd frontend
+npm install
+npm run dev    # http://localhost:5173, proxies /api to the backend
+npm test
+```
+
+Details, production configuration and testing notes: [docs/FRONTEND.md](docs/FRONTEND.md).
 
 ## Backend setup
 
@@ -79,6 +92,7 @@ Settings are read from environment variables or a `.env` file (see `.env.example
 | `PORTFOLIO_MAX_PAGES` | `5` | Pages fetched per portfolio (the supplied page plus same-host pages) |
 | `INTERVIEW_DEFAULT_FOLLOWUPS`, `INTERVIEW_MAX_FOLLOWUPS`, `INTERVIEW_MAX_QUESTIONS` | `2`, `3`, `30` | Follow-ups per main question (default and ceiling) and maximum interview length |
 | `INTERVIEW_IDLE_MINUTES`, `INTERVIEW_CREATED_EXPIRY_HOURS` | `120`, `72` | A running interview idle this long becomes `interrupted`; an unstarted one expires |
+| `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | `http://localhost:5173`, `[]` | Browser origins allowed to call the API (the frontend URL is always allowed; extra origins as a JSON list). No cookies or credentials are involved |
 | `INTERVIEW_SCORING` | unset | Optional JSON overrides of the interview scoring rules; validated at startup |
 | `MATCH_WEIGHTS` | unset | Optional JSON overrides of the job-match scoring weights, e.g. `{"required_skills": 0.5}`; validated at startup |
 
@@ -118,4 +132,5 @@ backend/
     storage/       # storage backends (local; S3 later)
   migrations/      # Alembic
   tests/
+frontend/          # React SPA (see docs/FRONTEND.md)
 ```
