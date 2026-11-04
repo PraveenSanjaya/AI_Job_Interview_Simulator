@@ -107,3 +107,75 @@ The limiter is **in-memory and per process**. It is not shared between workers o
 
 - `GET /health/live`: `{"status": "ok"}` while the process is running.
 - `GET /health/ready`: dependency checks. `database` is `ok` only after a real `SELECT 1` succeeds, `error` (HTTP 503) if the probe fails or times out, and `not_configured` if there is no `DATABASE_URL`. `redis` is `not_configured` or `unchecked` (there is no Redis client yet), and is never reported `ok`.
+
+## Resumes
+
+All resume endpoints require a Bearer token and only ever act on the caller's own resumes. A resume that belongs to someone else behaves exactly like one that does not exist (`404 resume_not_found`). See [RESUME_PROCESSING.md](RESUME_PROCESSING.md) for the security model, storage and retention.
+
+A resume object contains: `id`, `display_name` (sanitised), `file_format`, `size_bytes`, `status`, `failure_stage`, `error_code`, `error_message`, `page_count`, `char_count`, `word_count`, `has_analysis`, `created_at`, `extracted_at`, `analyzed_at`. Storage keys, hashes and text are never returned.
+
+### POST `/resumes` → 201
+
+`multipart/form-data` with one `file` field (PDF, DOCX or TXT, up to `MAX_UPLOAD_BYTES`, default 5 MiB). The type is determined from the bytes, not the filename or `Content-Type`.
+
+- Rejected and **not stored**: `415 unsupported_file_type`, `422` (`empty_file`, `invalid_document`, `content_mismatch`, `invalid_text_file`, `unsupported_or_encrypted_document`), `413 file_too_large` / `payload_too_large`.
+- Accepted but not readable (stored with `status="failed"`, `failure_stage="extraction"`): `ocr_required` (scanned/image-only PDF), `encrypted_document`, `corrupt_document`, `empty_document`, `too_many_pages`, `document_too_long`.
+- Success: `status="extracted"` with counts.
+
+### GET `/resumes` → 200, GET `/resumes/{id}` → 200
+
+List (newest first) and retrieve metadata.
+
+### DELETE `/resumes/{id}` → 204
+
+Deletes the resume, its analysis and the stored file.
+
+### POST `/resumes/{id}/analyze` → 200
+
+Body (optional): `{"allow_external_ai": false}`. Runs the configured AI provider and returns the analysis (same shape as `GET …/analysis`).
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 503 | `ai_unavailable` | no provider configured, or credentials rejected. Nothing else is affected |
+| 403 | `ai_consent_required` | the provider is external and `allow_external_ai` was not `true`. Nothing was sent |
+| 409 | `analysis_in_progress` | another analysis is running (a run stuck for 10+ minutes may be restarted) |
+| 409 | `resume_not_extracted` / `file_missing` | text could not be extracted, or the stored file is gone |
+| 502 | `invalid_ai_response` | the model did not return valid, schema-conforming JSON |
+| 502 / 504 / 429 | `ai_provider_error` / `ai_timeout` / `ai_rate_limited` | provider failure, timeout (`AI_TIMEOUT_SECONDS`), or rate limit (with `Retry-After` when provided) |
+
+Failures after the analysis has started are recorded on the resume (`status="failed"`, `failure_stage="analysis"`, `error_code`) and the call can simply be repeated. Re-analysing replaces the previous result.
+
+### GET `/resumes/{id}/analysis` → 200
+
+```json
+{
+  "resume_id": "…", "provider": "openai", "model": "…",
+  "consent_external_ai": true, "input_truncated": false, "created_at": "…",
+  "result": {
+    "facts": { "full_name": "…", "email": "…", "phone": "…", "location": "…", "links": [],
+               "summary_as_written": "…", "education": [], "work_experience": [],
+               "technical_skills": [], "soft_skills": [], "tools_and_technologies": [],
+               "projects": [], "certifications": [] },
+    "assessment": { "ai_summary": "…", "strengths": [], "potential_skill_gaps": [] },
+    "missing_information": ["phone", "certifications"],
+    "unverified_items_removed": 0
+  },
+  "profile_suggestion": { "…": "same shape as the apply-to-profile request" },
+  "suggestion_notes": ["An education entry without a degree was left out"]
+}
+```
+
+- `result.facts` are extracted from the resume and verified against its text (unverifiable items are removed and counted in `unverified_items_removed`). `result.assessment` is **AI-generated opinion** and may be wrong. `missing_information` is computed by code.
+- `profile_suggestion` is a starting point and has **not** been applied. Entries that would need invented data (for example an education entry without a degree) are left out and listed in `suggestion_notes`.
+- `404 analysis_not_found` if the resume has not been analysed.
+
+### POST `/resumes/{id}/apply-to-profile` → 200
+
+Applies **only what you send**. Typically you take `profile_suggestion`, let the user edit or deselect parts, and post the result. Requires a completed analysis (`409 analysis_required` otherwise).
+
+Body fields (all optional, but at least one must be present; unknown fields are rejected): `full_name`, `headline`, `career_objective`, `education`, `work_experience`, `skills`, `projects`, `certifications` (same item shapes and validation as `PUT /profile`), `mode` (`merge` default, or `replace`) and `overwrite_existing` (default `false`).
+
+- **Lists, `merge`:** new items are appended after existing ones. Items already present are skipped (case-insensitive: skills by category and name, education by institution and degree, jobs by company, title and start date, projects by name, certifications by name and issuer). Existing items are never modified or removed.
+- **Lists, `replace`:** the provided section replaces the existing one. Sections you do not send are untouched.
+- **Scalars:** filled when empty or identical. When the profile already holds a different value it is kept and reported in `skipped`, unless `overwrite_existing` is `true`.
+- Response: `{"applied": {"skills": 4, …}, "skipped": [{"field": "career_objective", "reason": "…"}], "profile": { … }}`.
