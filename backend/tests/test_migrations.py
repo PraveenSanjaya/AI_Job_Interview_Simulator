@@ -9,6 +9,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+from contextlib import closing
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -37,7 +38,7 @@ def run_alembic(database_url: str, *args: str) -> subprocess.CompletedProcess[st
 
 
 def table_names(db_file: Path) -> set[str]:
-    with sqlite3.connect(db_file) as connection:
+    with closing(sqlite3.connect(db_file)) as connection:
         rows = connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     return {row[0] for row in rows} - {"alembic_version"}
 
