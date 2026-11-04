@@ -330,3 +330,7 @@ class MatchAdviser:
         message = build_user_message(build_data(report, preferred_roles, duties))
         raw = await self._provider.complete_json(system=SYSTEM_PROMPT, user=message)
         return AdviceOutcome(advice=verify(parse_output(raw), report))
+
+
+acceptable_text = _acceptable
+"""Public name for the outcome-promise / score-claim check, shared with interview feedback."""
