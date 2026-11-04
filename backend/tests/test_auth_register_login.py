@@ -3,6 +3,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.passwords import hash_password
 from app.core.tokens import hash_refresh_token
 from app.models import RefreshToken, User
 from tests.helpers import DEFAULT_PASSWORD, login, register
@@ -14,18 +15,17 @@ async def test_register_creates_user_and_profile(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     response = await register(client, "Ada@Example.com ", full_name="  Ada Lovelace ")
-    assert response.status_code == 201
-    body = response.json()
-    assert body["email"] == "ada@example.com"  # normalised
-    assert body["role"] == "user"
-    assert body["is_active"] is True
+    assert response.status_code == 202
     user = (await session.execute(select(User))).scalar_one()
+    assert user.email == "ada@example.com"  # normalised
+    assert user.role.value == "user"
+    assert user.is_active is True
     assert user.profile.full_name == "Ada Lovelace"
 
 
 async def test_register_response_never_contains_secrets(client: httpx.AsyncClient) -> None:
     response = await register(client)
-    assert set(response.json()) == {"id", "email", "role", "is_active", "created_at"}
+    assert set(response.json()) == {"message"}
     assert DEFAULT_PASSWORD not in response.text
     assert "argon2" not in response.text
 
@@ -42,12 +42,44 @@ async def test_password_is_stored_as_argon2id_hash_only(
 async def test_duplicate_email_is_rejected_case_insensitively(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
-    assert (await register(client, "dup@example.com")).status_code == 201
-    response = await register(client, "DUP@example.com")
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "email_already_registered"
+    first = await register(client, "dup@example.com")
+    second = await register(client, "DUP@example.com", password="Other-passphrase-77")
+    # Indistinguishable from a fresh registration: no account enumeration.
+    assert first.status_code == second.status_code == 202
+    assert first.json() == second.json()
+    assert dict(first.headers).keys() - {"x-request-id", "date"} == dict(second.headers).keys() - {
+        "x-request-id",
+        "date",
+    }
     users = (await session.execute(select(User))).scalars().all()
     assert len(users) == 1
+
+
+async def test_registering_an_existing_email_never_changes_the_account(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    await register(client, "victim@example.com", full_name="Victim")
+    await register(client, "victim@example.com", password="Attacker-pass-99", full_name="Evil")
+    assert (await login(client, "victim@example.com")).status_code == 200
+    assert (await login(client, "victim@example.com", "Attacker-pass-99")).status_code == 401
+    user = (await session.execute(select(User))).scalar_one()
+    assert user.profile.full_name == "Victim"
+
+
+async def test_existing_email_path_still_hashes_the_password(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await register(client, "t@example.com")
+    calls: list[str] = []
+    real = hash_password
+
+    def spy(password: str) -> str:
+        calls.append(password)
+        return real(password)
+
+    monkeypatch.setattr("app.services.auth.hash_password", spy)
+    await register(client, "t@example.com", password="Another-pass-123")
+    assert calls == ["Another-pass-123"]  # same expensive work as a new account
 
 
 @pytest.mark.parametrize(

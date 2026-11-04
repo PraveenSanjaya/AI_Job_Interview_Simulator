@@ -48,6 +48,15 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
 
 
+class RegistrationAccepted(BaseModel):
+    """Identical for new and already-registered emails (prevents account enumeration)."""
+
+    message: str = (
+        "Registration request accepted. If this email address was not already registered, "
+        "you can now sign in."
+    )
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=1, max_length=512)
 

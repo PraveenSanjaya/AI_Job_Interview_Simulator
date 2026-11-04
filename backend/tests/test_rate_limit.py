@@ -78,4 +78,4 @@ async def test_login_is_rate_limited_per_target_email(
 async def test_registration_is_rate_limited(app: FastAPI, client: httpx.AsyncClient) -> None:
     app.state.rate_limiter = InMemoryRateLimiter(2, 60)
     codes = [(await register(client, f"u{i}@example.com")).status_code for i in range(3)]
-    assert codes == [201, 201, 429]
+    assert codes == [202, 202, 429]

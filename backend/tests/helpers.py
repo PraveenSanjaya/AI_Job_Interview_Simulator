@@ -34,7 +34,7 @@ async def register_and_login(
     full_name: str = "Ada Lovelace",
 ) -> dict[str, Any]:
     created = await register(client, email, password, full_name)
-    assert created.status_code == 201, created.text
+    assert created.status_code == 202, created.text
     response = await login(client, email, password)
     assert response.status_code == 200, response.text
     tokens: dict[str, Any] = response.json()

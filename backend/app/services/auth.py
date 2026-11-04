@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.exceptions import ConflictError, UnauthorizedError
+from app.core.exceptions import UnauthorizedError
 from app.core.passwords import hash_password, needs_rehash, verify_against_dummy, verify_password
 from app.core.tokens import create_access_token, generate_refresh_token, hash_refresh_token
 from app.models import RefreshToken, User, UserProfile
@@ -31,11 +31,19 @@ class AuthService:
         self._users = UserRepository(session)
         self._tokens = RefreshTokenRepository(session)
 
-    async def register(self, *, email: str, password: str, full_name: str) -> User:
-        if await self._users.get_by_email(email) is not None:
-            raise ConflictError("Email is already registered", code="email_already_registered")
+    async def register(self, *, email: str, password: str, full_name: str) -> bool:
+        """Create an account if the email is free. Returns whether one was created.
+
+        Callers must NOT expose the result to the client: responding differently for
+        an existing email would let anyone enumerate registered addresses. The
+        password is hashed before the lookup so both paths do the expensive work, and
+        an existing account is never modified.
+        """
         # Argon2 is CPU-bound; keep it off the event loop.
         hashed = await asyncio.to_thread(hash_password, password)
+        if await self._users.get_by_email(email) is not None:
+            logger.info("Registration ignored: email already registered")
+            return False
         user = User(
             email=email,
             hashed_password=hashed,
@@ -47,10 +55,9 @@ class AuthService:
         except IntegrityError:
             # Lost a race with a concurrent registration of the same email.
             await self._session.rollback()
-            raise ConflictError(
-                "Email is already registered", code="email_already_registered"
-            ) from None
-        return user
+            logger.info("Registration ignored: email already registered (race)")
+            return False
+        return True
 
     async def login(self, *, email: str, password: str) -> TokenResponse:
         """Authenticate and issue a token pair.

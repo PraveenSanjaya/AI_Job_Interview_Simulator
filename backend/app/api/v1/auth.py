@@ -10,6 +10,7 @@ from app.schemas.auth import (
     LogoutRequest,
     RefreshRequest,
     RegisterRequest,
+    RegistrationAccepted,
     TokenResponse,
     UserResponse,
 )
@@ -17,18 +18,17 @@ from app.schemas.auth import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=RegistrationAccepted, status_code=status.HTTP_202_ACCEPTED)
 async def register(
     body: RegisterRequest,
     service: AuthServiceDep,
     limiter: RateLimiterDep,
     ip: ClientIpDep,
-) -> UserResponse:
+) -> RegistrationAccepted:
+    """Always answers 202 with the same body, whether or not the email was taken."""
     limiter.hit(f"register:ip:{ip}")
-    user = await service.register(
-        email=body.email, password=body.password, full_name=body.full_name
-    )
-    return UserResponse.model_validate(user)
+    await service.register(email=body.email, password=body.password, full_name=body.full_name)
+    return RegistrationAccepted()
 
 
 @router.post("/login", response_model=TokenResponse)
