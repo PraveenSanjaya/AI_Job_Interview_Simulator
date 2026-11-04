@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.ai.cv_schemas import CVAnalysisResult
 from app.models.enums import FailureStage, ResumeStatus
+from app.schemas.profile import ApplyToProfileRequest
 
 
 class ResumeResponse(BaseModel):
@@ -52,3 +53,6 @@ class AnalysisResponse(BaseModel):
     input_truncated: bool
     created_at: datetime
     result: CVAnalysisResult
+    # A starting point for the user to review/edit; it has NOT been applied to the profile.
+    profile_suggestion: ApplyToProfileRequest | None = None
+    suggestion_notes: list[str] = Field(default_factory=list)

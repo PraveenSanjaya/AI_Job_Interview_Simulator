@@ -6,6 +6,7 @@ audit columns. Text is whitespace-trimmed and length-bounded.
 
 import uuid
 from datetime import date, datetime
+from enum import StrEnum
 from typing import Annotated, Self
 
 from pydantic import (
@@ -99,6 +100,16 @@ class CertificationIn(_Input):
     credential_url: WebUrl | None = None
 
 
+def check_unique_skills(skills: list[SkillIn]) -> list[SkillIn]:
+    seen: set[tuple[SkillCategory, str]] = set()
+    for skill in skills:
+        key = (skill.category, skill.name.casefold())
+        if key in seen:
+            raise ValueError(f"Duplicate {skill.category.value} skill: {skill.name}")
+        seen.add(key)
+    return skills
+
+
 class ProfileUpdate(_Input):
     """Full replacement of the profile (PUT semantics): omitted optional fields are
     cleared and omitted lists become empty."""
@@ -129,13 +140,7 @@ class ProfileUpdate(_Input):
     @field_validator("skills")
     @classmethod
     def _unique_skills(cls, skills: list[SkillIn]) -> list[SkillIn]:
-        seen: set[tuple[SkillCategory, str]] = set()
-        for skill in skills:
-            key = (skill.category, skill.name.casefold())
-            if key in seen:
-                raise ValueError(f"Duplicate {skill.category.value} skill: {skill.name}")
-            seen.add(key)
-        return skills
+        return check_unique_skills(skills)
 
 
 class _Output(BaseModel):
@@ -199,3 +204,60 @@ class ProfileResponse(_Output):
     projects: list[ProjectOut]
     certifications: list[CertificationOut]
     updated_at: datetime
+
+
+class ApplyMode(StrEnum):
+    MERGE = "merge"  # add new items, keep existing ones
+    REPLACE = "replace"  # replace each provided section entirely
+
+
+class ApplyToProfileRequest(_Input):
+    """The reviewed data a user chooses to apply to their profile.
+
+    Only fields that are present are touched; omitted fields (``null``) leave the
+    profile unchanged. Lists use ``mode``; scalar fields never replace a different
+    existing value unless ``overwrite_existing`` is true.
+    """
+
+    full_name: FullName | None = None
+    headline: Name200 | None = None
+    career_objective: Text5000 | None = None
+    education: list[EducationIn] | None = Field(default=None, max_length=20)
+    work_experience: list[WorkExperienceIn] | None = Field(default=None, max_length=30)
+    skills: list[SkillIn] | None = Field(default=None, max_length=100)
+    projects: list[ProjectIn] | None = Field(default=None, max_length=30)
+    certifications: list[CertificationIn] | None = Field(default=None, max_length=30)
+    mode: ApplyMode = ApplyMode.MERGE
+    overwrite_existing: bool = False
+
+    @field_validator("skills")
+    @classmethod
+    def _unique_skills(cls, skills: list[SkillIn] | None) -> list[SkillIn] | None:
+        return None if skills is None else check_unique_skills(skills)
+
+    @model_validator(mode="after")
+    def _something_selected(self) -> Self:
+        sections = (
+            self.full_name,
+            self.headline,
+            self.career_objective,
+            self.education,
+            self.work_experience,
+            self.skills,
+            self.projects,
+            self.certifications,
+        )
+        if all(value is None for value in sections):
+            raise ValueError("Select at least one field or section to apply")
+        return self
+
+
+class SkippedField(_Output):
+    field: str
+    reason: str
+
+
+class ApplyResult(_Output):
+    applied: dict[str, int]
+    skipped: list[SkippedField]
+    profile: ProfileResponse

@@ -7,9 +7,12 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 
 from app.ai.base import LLMProvider
 from app.ai.cv_schemas import CVAnalysisResult
+from app.ai.suggestions import build_profile_suggestion
 from app.api.deps import CurrentUserDep, RateLimiterDep, SessionDep, SettingsDep
 from app.models import ResumeAnalysis
+from app.schemas.profile import ApplyResult, ApplyToProfileRequest
 from app.schemas.resume import AnalysisResponse, AnalyzeRequest, ResumeResponse
+from app.services.profile import ProfileService
 from app.services.resume_analysis import ResumeAnalysisService
 from app.services.resumes import ResumeService
 from app.storage.base import StorageBackend
@@ -123,6 +126,8 @@ async def get_analysis(
 
 
 def _analysis_response(resume_id: uuid.UUID, analysis: ResumeAnalysis) -> AnalysisResponse:
+    result = CVAnalysisResult.model_validate(analysis.result)
+    suggestion, notes = build_profile_suggestion(result)
     return AnalysisResponse(
         resume_id=resume_id,
         provider=analysis.provider,
@@ -130,5 +135,31 @@ def _analysis_response(resume_id: uuid.UUID, analysis: ResumeAnalysis) -> Analys
         consent_external_ai=analysis.consent_external_ai,
         input_truncated=analysis.input_truncated,
         created_at=analysis.created_at,
-        result=CVAnalysisResult.model_validate(analysis.result),
+        result=result,
+        profile_suggestion=suggestion,
+        suggestion_notes=notes,
+    )
+
+
+@router.post("/{resume_id}/apply-to-profile", response_model=ApplyResult)
+async def apply_to_profile(
+    resume_id: uuid.UUID,
+    body: ApplyToProfileRequest,
+    user: CurrentUserDep,
+    service: AnalysisServiceDep,
+) -> ApplyResult:
+    """Apply the data the user reviewed to their profile.
+
+    Nothing is applied automatically: send only the fields and sections you approve
+    (typically the ``profile_suggestion`` from the analysis, after editing it).
+    Existing profile data is preserved: list sections are merged without duplicates
+    (``mode="replace"`` replaces a section explicitly), and a scalar that already has a
+    different value is kept unless ``overwrite_existing`` is true. Requires a
+    completed analysis of the caller's own resume.
+    """
+    _, outcome = await service.apply_to_profile(user, resume_id, body)
+    return ApplyResult(
+        applied=outcome.applied,
+        skipped=outcome.skipped,
+        profile=ProfileService.to_response(user, outcome.profile),
     )

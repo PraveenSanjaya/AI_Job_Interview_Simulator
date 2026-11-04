@@ -7,6 +7,7 @@ worker can replace this later without changing the state model.
 
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,9 +18,11 @@ from app.ai.errors import AIConsentRequiredError, AIUnavailableError
 from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.documents.extract import ProcessingError, extract_text_async
 from app.documents.validation import DocumentFormat
-from app.models import Resume, ResumeAnalysis, User
+from app.models import Resume, ResumeAnalysis, User, UserProfile
 from app.models.enums import FailureStage, ResumeStatus
 from app.repositories.resumes import ResumeRepository
+from app.schemas.profile import ApplyToProfileRequest, SkippedField
+from app.services.profile import ProfileService
 from app.services.resumes import ResumeService
 from app.storage.base import StorageBackend, StorageError
 
@@ -27,6 +30,13 @@ from app.storage.base import StorageBackend, StorageError
 logger = logging.getLogger(__name__)
 
 STALE_ANALYSIS_AFTER = timedelta(minutes=10)
+
+
+@dataclass(frozen=True)
+class ApplyOutcome:
+    profile: UserProfile
+    applied: dict[str, int]
+    skipped: list[SkippedField]
 
 
 class ResumeAnalysisService:
@@ -112,6 +122,23 @@ class ResumeAnalysisService:
         if resume.analysis is None:
             raise NotFoundError("This resume has not been analysed", code="analysis_not_found")
         return resume.analysis
+
+    async def apply_to_profile(
+        self, user: User, resume_id: uuid.UUID, data: ApplyToProfileRequest
+    ) -> tuple[Resume, ApplyOutcome]:
+        """Apply user-reviewed data to the user's own profile.
+
+        Requires a completed analysis of the user's own resume. The server never
+        applies extracted data by itself: it only applies what the user sends here.
+        """
+        resume = await self._lookup.get(user, resume_id)
+        if resume.analysis is None:
+            raise ConflictError(
+                "Analyse the resume before applying it to your profile", code="analysis_required"
+            )
+        profile_service = ProfileService(self._session)
+        profile, applied, skipped = await profile_service.apply_selected(user, data)
+        return resume, ApplyOutcome(profile=profile, applied=applied, skipped=skipped)
 
     async def _load_text(self, resume: Resume) -> str:
         try:
