@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     auth_rate_limit_attempts: int = Field(default=10, ge=1)
     auth_rate_limit_window_seconds: int = Field(default=60, ge=1)
 
+    # Document storage. "local" writes under local_storage_path (must not be served by a
+    # web server); "s3" is reserved for a later phase and rejected at startup.
+    storage_backend: Literal["local", "s3"] = "local"
+    local_storage_path: str = "./storage"
+    max_upload_bytes: int = Field(default=5 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024)
+
     frontend_url: str = "http://localhost:5173"
     backend_url: str = "http://localhost:8000"
 

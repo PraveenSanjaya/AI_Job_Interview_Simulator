@@ -14,6 +14,7 @@ from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.core.rate_limit import InMemoryRateLimiter, NoopRateLimiter, RateLimiter
 from app.db.session import create_db_engine, create_session_factory
+from app.storage import create_storage
 
 API_V1_PREFIX = "/api/v1"
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
     else:
         app.state.engine = None
         app.state.session_factory = None
+    app.state.storage = create_storage(settings)
     limiter: RateLimiter = (
         InMemoryRateLimiter(
             settings.auth_rate_limit_attempts, settings.auth_rate_limit_window_seconds

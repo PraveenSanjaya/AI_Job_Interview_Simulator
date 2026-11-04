@@ -23,6 +23,7 @@ from app.core.rate_limit import InMemoryRateLimiter
 from app.db.session import create_db_engine, create_session_factory
 from app.main import create_app
 from app.models import Base  # importing the package registers every model
+from app.storage.local import LocalStorage
 
 TEST_JWT_SECRET = "test-only-jwt-secret-0123456789abcdef-xyz"
 _RAW_TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "").strip()
@@ -52,8 +53,9 @@ async def _reset_schema(engine: AsyncEngine) -> None:
         await connection.run_sync(Base.metadata.create_all)
 
 
-def build_app(engine: AsyncEngine, settings: Settings) -> FastAPI:
+def build_app(engine: AsyncEngine, settings: Settings, storage_root: Path) -> FastAPI:
     application = create_app()
+    application.state.storage = LocalStorage(storage_root)
     application.state.engine = engine
     application.state.session_factory = create_session_factory(engine)
     application.state.rate_limiter = InMemoryRateLimiter(1000, 60)
@@ -113,8 +115,8 @@ def settings() -> Settings:
 
 
 @pytest.fixture
-def app(db_engine: AsyncEngine, settings: Settings) -> FastAPI:
-    return build_app(db_engine, settings)
+def app(db_engine: AsyncEngine, settings: Settings, tmp_path: Path) -> FastAPI:
+    return build_app(db_engine, settings, tmp_path / "storage")
 
 
 @pytest.fixture
@@ -148,9 +150,9 @@ async def concurrent_engine(
 
 @pytest.fixture
 async def concurrent_client(
-    concurrent_engine: AsyncEngine, settings: Settings
+    concurrent_engine: AsyncEngine, settings: Settings, tmp_path: Path
 ) -> AsyncIterator[httpx.AsyncClient]:
-    app = build_app(concurrent_engine, settings)
+    app = build_app(concurrent_engine, settings, tmp_path / "storage")
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as http_client:
         yield http_client
