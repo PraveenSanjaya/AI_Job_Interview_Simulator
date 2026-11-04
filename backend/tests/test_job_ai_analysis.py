@@ -424,3 +424,98 @@ def test_enrich_does_not_mutate_the_deterministic_result() -> None:
     assert removed == 0
     assert parsed.model_dump() == snapshot
     assert len(merged.technical_skills) == len(parsed.technical_skills) + 1
+
+
+# ------------------------------------------------- labels and statements (unit)
+
+LABEL_TEXT = """\
+Platform Engineer
+
+We value resilience under pressure and run an agritech business.
+Requirements
+- Offensive Security OSCP certification is expected
+- Good teamwork
+Responsibilities
+- Keep the data platform reliable
+- Review pull requests carefully
+"""
+
+
+def test_enrich_adds_grounded_labels_and_statements_and_drops_the_rest() -> None:
+    parsed = parse_job("Platform Engineer", LABEL_TEXT)
+    output = parse_output(
+        json.dumps(
+            {
+                "soft_skills": [
+                    {"name": "Resilience", "quote": "We value resilience under pressure"},
+                    {"name": "Teamwork", "quote": "Good teamwork"},  # already found by the parser
+                    {"name": "Empathy", "quote": "Show empathy daily"},  # not in the text
+                ],
+                "certifications": [
+                    {"name": "OSCP", "quote": "Offensive Security OSCP certification is expected"},
+                    {"name": "CISM", "quote": "Offensive Security OSCP certification is expected"},
+                ],
+                "domain_knowledge": [
+                    {"name": "Agritech", "quote": "run an agritech business"},
+                ],
+                "responsibilities": [
+                    "Keep the data platform reliable",  # duplicate of the parser's
+                    "Review pull requests carefully",  # already found too
+                    "Mentor the whole company",  # not in the text
+                ],
+                "qualifications": ["Good teamwork", "Run marathons"],
+            }
+        )
+    )
+    merged, removed = enrich(parsed, output, LABEL_TEXT)
+
+    soft = {s.name: s for s in merged.soft_skills}
+    assert soft["Resilience"].source == "ai"
+    assert soft["Teamwork"].source == "text"  # not duplicated, not relabelled
+    assert "Empathy" not in soft
+    certs = {c.name for c in merged.certifications}
+    assert "OSCP" in certs and "CISM" not in certs
+    assert [d.name for d in merged.domain_knowledge if d.source == "ai"] == ["Agritech"]
+    assert [r.text for r in merged.responsibilities].count("Keep the data platform reliable") == 1
+    assert "Mentor the whole company" not in [r.text for r in merged.responsibilities]
+    assert "Run marathons" not in [q.text for q in merged.qualifications]
+    assert removed == 4  # Empathy, CISM, "Mentor ...", "Run marathons"
+
+
+def test_enrich_warning_is_refreshed_when_ai_finds_the_first_technology() -> None:
+    text = "Data Engineer\n\nRequirements\n- Experience with Prefect for workflow orchestration\n"
+    parsed = parse_job("Data Engineer", text)
+    assert any("No specific technologies" in w for w in parsed.warnings)
+    output = parse_output(
+        json.dumps(
+            {
+                "technical_skills": [
+                    {
+                        "name": "Prefect",
+                        "quote": "Experience with Prefect for workflow orchestration",
+                    }
+                ]
+            }
+        )
+    )
+    merged, _ = enrich(parsed, output, text)
+    assert merged.required_technical_skills == ["Prefect"]
+    assert not any("No specific technologies" in w for w in merged.warnings)
+
+
+async def test_parser_failure_during_reanalysis_marks_the_job_failed(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    headers = await headers_for(client)
+    job_id = await make_job(client, headers)
+
+    def boom(title: str, description: str) -> None:
+        raise RuntimeError(description)
+
+    monkeypatch.setattr("app.services.job_analysis.parse_job", boom)
+    response = await analyze(client, headers, job_id)
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "job_parse_failed"
+    assert "Requirements" not in response.text
+    job = (await client.get(f"{JOBS}/{job_id}", headers=headers)).json()
+    assert job["status"] == "failed" and job["has_analysis"] is False
