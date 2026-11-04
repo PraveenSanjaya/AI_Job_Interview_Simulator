@@ -337,3 +337,61 @@ A report is a stored snapshot: it does not change when the profile, CV, GitHub, 
 ### GET `/jobs/{id}/matches` → 200, GET `/jobs/{id}/matches/{match_id}` → 200
 
 List (newest first: `id`, `job_id`, `created_at`, `overall_score`, `score_status`, `confidence`) and retrieve a stored match exactly as it was created.
+
+## Interviews
+
+All endpoints require a Bearer token and only see the caller's own interviews (`404 interview_not_found` otherwise). Design, scoring and privacy: [INTERVIEWS.md](INTERVIEWS.md). Starting, completing and answering are rate limited per user (per process).
+
+### POST `/interviews` → 201
+
+Body: `{"interview_types": ["technical","hr"], "difficulty": "intermediate", "question_count": 10, "job_id": null, "max_followups": null, "use_ai": true, "allow_external_ai": false, "scoring": null}`.
+
+* `interview_types`: one or more of `hr`, `behavioral`, `technical`, `programming`, `project`, `system_design`, `job_specific` (no repeats; `job_specific` needs `job_id`).
+* `difficulty`: `beginner | intermediate | advanced`. `question_count`: main questions, 1 to `INTERVIEW_MAX_QUESTIONS` (30), at least one per type.
+* `job_id`: one of your saved jobs (optional). `max_followups`: per main question, default 2, at most 3.
+* `use_ai`: use the configured provider when possible. `allow_external_ai`: explicit consent, needed when the provider is external; without it nothing is sent and the question bank is used.
+* `scoring`: optional overrides `{"weights": {...}, "followup_weight": 0.5, "skipped_counts_as_zero": true, "strong_threshold": 7.5, "weak_threshold": 5.0}`.
+
+Response: `{id, status, interview_types, difficulty, question_count, max_followups, job_id, job_title, use_ai, consent_external_ai, mode, ai_status, adaptive_followups, notes, ai_provider, ai_model, scoring_config, progress, created_at, started_at, completed_at, last_activity_at}`. `mode` (`ai` | `question_bank`) and `ai_status` (`ok`, `disabled_by_user`, `provider_unavailable`, `consent_not_given`, `generation_failed:<code>`) are set when the interview starts; `notes` explains a bank fallback. Errors: `422 invalid_interview_config` (also `job_required`, `too_many_questions`, `too_many_followups`, `too_few_questions`, `invalid_scoring_rules` as codes), `404 job_not_found`, `422 validation_error`.
+
+### GET `/interviews` → 200, GET `/interviews/{id}` → 200
+
+List (newest first) and detail with `progress` (`main_questions_total/asked`, `answered`, `skipped`, `followups_asked`, `remaining_main_questions`). Idle running interviews appear as `interrupted`, old unstarted ones as `expired`.
+
+### POST `/interviews/{id}/start` → 200
+
+Generates the questions (AI, or the bank) and asks the first; also resumes an `interrupted` interview. `409 invalid_interview_state` if it is running, completed, cancelled or expired.
+
+### POST `/interviews/{id}/cancel` → 200, POST `/interviews/{id}/complete` → 200
+
+Cancel from `created`, `in_progress` or `interrupted`. Complete from `in_progress` or `interrupted` (also early): returns the report (`{id, session_id, created_at, overall_score, report}`). Other states give `409 invalid_interview_state`.
+
+### GET `/interviews/{id}/current-question` → 200
+
+`{status, question, all_questions_answered}`; `question` is the open question (a main question or a follow-up) or `null`. Expected points are never included.
+
+### GET `/interviews/{id}/questions` → 200
+
+Questions asked so far, each with `main_index`, `followup_index`, `is_followup`, `followup_kind`, `category`, `text`, `source` (`ai` | `question_bank`), `skill_tags` and your `answer`. Later questions stay hidden.
+
+### POST `/interviews/{id}/answers` → 201
+
+Body: `{"question_id": "…", "text": "…"}` or `{"question_id": "…", "skip": true}` (text 1 to 8,000 characters; not both). Only the current question can be answered, once.
+
+Response: `{answer, evaluation, follow_up_asked, followups_note, next_question, all_questions_answered, progress}`. The answer is always saved. `evaluation.status` is `evaluated` (with `result`: dimension scores 0-10 with rationales, correct and missing points, strengths, improvements, summary, STAR for behavioral questions, `suspicious_instructions`), `unavailable` (no AI in use), `failed` (with `reason`, e.g. `ai_timeout`, `invalid_ai_response`) or `not_evaluated` (skipped). `next_question` is a follow-up when `follow_up_asked`, else the next main question, else `null` (then complete the interview).
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 409 | `invalid_interview_state` | not in progress |
+| 409 | `not_current_question` | wrong or already answered question |
+| 409 | `concurrent_submission` | another answer was accepted at the same moment |
+| 409 | `no_open_question` | everything is answered; complete the interview |
+| 422 | `validation_error` | empty or oversized answer, both or neither of text and skip |
+
+### GET `/interviews/{id}/evaluations` → 200
+
+`[{id, answer_id, question_id, status, reason, provider, model, result, created_at}]`.
+
+### GET `/interviews/{id}/report` → 200
+
+The stored report; `409 report_not_ready` until the interview is completed. `report` contains `overall_score` (0-100 or `null`), `score_status` (`scored` | `not_evaluated`), `score_explanation`, `counts`, `dimension_scores`, `group_scores` (`knowledge`, `approach`, `communication` with `subjective: true`), `category_scores`, `star_summary`, `strong_answers`, `weak_answers`, `not_evaluated`, `knowledge_gaps`, `study_topics`, `practice_questions`, `ai_feedback` and `ai_feedback_status`, `calculation_notes`, `scoring_config` and `disclaimer`.
