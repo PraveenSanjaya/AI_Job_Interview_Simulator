@@ -27,7 +27,11 @@ from urllib.parse import SplitResult, urljoin, urlsplit
 
 import httpx
 
-from app.integrations.errors import PortfolioFetchError, PortfolioUrlRejectedError
+from app.integrations.errors import (
+    PortfolioFetchError,
+    PortfolioHttpError,
+    PortfolioUrlRejectedError,
+)
 
 ALLOWED_PORTS = {"http": 80, "https": 443}
 MAX_URL_LENGTH = 2000
@@ -230,10 +234,7 @@ class SafeFetcher:
                 current = self._next_hop(current, response.headers.get("location"))
                 continue
             if response.status_code != 200:
-                raise PortfolioFetchError(
-                    f"The portfolio site answered with HTTP {response.status_code}",
-                    code="portfolio_http_error",
-                )
+                raise PortfolioHttpError(response.status_code)
             content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
             return FetchResult(
                 url=_display_url(current),

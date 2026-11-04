@@ -53,6 +53,16 @@ class PortfolioFetchError(AppError):
     code = "portfolio_fetch_failed"
 
 
+class PortfolioHttpError(PortfolioFetchError):
+    """The site answered, but not with a usable page (404, 403, 5xx, ...)."""
+
+    code = "portfolio_http_error"
+
+    def __init__(self, status: int) -> None:
+        super().__init__(f"The portfolio site answered with HTTP {status}")
+        self.http_status = status
+
+
 class SourceNotConnectedError(AppError):
     status_code = status.HTTP_404_NOT_FOUND
     code = "source_not_connected"
