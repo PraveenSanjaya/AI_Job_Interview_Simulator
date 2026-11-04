@@ -1,12 +1,13 @@
 # Requirements
 
 ## 1. Vision
+
 An AI interview coach. It analyzes a candidate's CV, GitHub profile, portfolio and target job descriptions, then runs personalized text and voice mock interviews. It evaluates answers, remembers past performance and recommends how to close skill gaps.
 
 ## 2. Functional Requirements
 
 | ID | Module | Summary |
-|---|---|---|
+| --- | --- | --- |
 | FR-1 | Authentication | Register, login, logout, JWT access + refresh tokens, password reset, optional email verification, roles. Argon2id hashing, login rate limiting. |
 | FR-2 | Candidate profile | Headline, objective, education, experience, skills, certifications, projects, preferred roles, level, difficulty. |
 | FR-3 | Resume analysis | Upload PDF/DOCX/TXT with size and type validation. Extract text, build a structured profile with AI, let the user review and correct it. Uploaded text is untrusted data. |
@@ -22,6 +23,7 @@ An AI interview coach. It analyzes a candidate's CV, GitHub profile, portfolio a
 | FR-13 | Voice | Provider interfaces (LiveKit, Pipecat, Deepgram, ElevenLabs). The app must work fully in text-only mode. |
 
 ## 3. Non-Functional Requirements
+
 - **Security:** hashing, JWT, authorization on every private route, CORS, rate limiting, upload validation, SSRF protection, no secrets in code or logs, user data isolation.
 - **Quality:** backend coverage of 80% or higher, Ruff, MyPy, ESLint, Prettier, pre-commit hooks.
 - **Observability:** structured logs with correlation IDs, Prometheus metrics, Sentry, LangSmith; no PII, resume content or tokens in logs.
@@ -29,6 +31,7 @@ An AI interview coach. It analyzes a candidate's CV, GitHub profile, portfolio a
 - **Accessibility and UX:** responsive, light and dark themes, loading and error states.
 
 ## 4. Technology Stack
+
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS, React Router, TanStack Query, Axios, React Hook Form, Zod, Recharts, Lucide.
 - **Backend:** Python 3.12+, FastAPI, Pydantic, SQLAlchemy 2.x, Alembic, Uvicorn, WebSockets.
 - **Data:** PostgreSQL + pgvector, Redis, S3 (local adapter in development).
@@ -38,11 +41,13 @@ An AI interview coach. It analyzes a candidate's CV, GitHub profile, portfolio a
 - **Testing:** Pytest, HTTPX, Testcontainers, Vitest, React Testing Library, Playwright, Locust.
 
 ## 5. Definition of Done
+
 **Feature:** works, validated, error handling, relevant tests actually run, docs updated, dedicated commit with verified author `PraveenSanjaya`.
 
 **Project:** the 20 completion criteria in the original specification (register through to separate verified feature commits).
 
 ## 6. Assumptions and Constraints
+
 - Only the local toolchain is available: Python 3.13, Node 22. Docker, PostgreSQL and Redis are not installed, so DB-dependent behavior needs Docker to be verified.
 - No third-party API credentials exist yet. Live AI and voice behavior cannot be verified without them.
 - Commits are local only. No push without explicit owner authorization.
