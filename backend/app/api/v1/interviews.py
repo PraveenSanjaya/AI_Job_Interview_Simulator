@@ -186,7 +186,7 @@ async def start_interview(
     """Start a created interview (generating its questions) or resume an interrupted one.
 
     ``409 invalid_interview_state`` if it is completed, cancelled, expired or already running."""
-    limiter.hit(f"interview:user:{user.id}")
+    await limiter.hit(f"interview:user:{user.id}")
     return await interview_response(service, await service.start(user, session_id))
 
 
@@ -203,7 +203,7 @@ async def complete_interview(
 ) -> ReportResponse:
     """Finish the interview (also early) and get the report. Questions never asked are left
     out of the score."""
-    limiter.hit(f"interview:user:{user.id}")
+    await limiter.hit(f"interview:user:{user.id}")
     report = await service.complete(user, session_id)
     return _report_response(report.id, report.session_id, report.created_at, report.overall_score,
                             report.result)  # fmt: skip
@@ -250,7 +250,7 @@ async def submit_answer(
     ``unavailable`` and no follow-up is asked. Errors: ``409 not_current_question``,
     ``409 concurrent_submission``, ``409 invalid_interview_state``.
     """
-    limiter.hit(f"interview-answer:user:{user.id}")
+    await limiter.hit(f"interview-answer:user:{user.id}")
     answer, evaluation, next_question, follow_up_asked, note = await service.answer(
         user, session_id, body
     )

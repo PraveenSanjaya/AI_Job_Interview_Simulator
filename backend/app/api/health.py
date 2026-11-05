@@ -24,7 +24,9 @@ async def ready(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ReadinessResponse:
     """Dependencies required to serve traffic are available."""
-    result = await run_readiness_checks(settings, request.app.state.engine)
+    result = await run_readiness_checks(
+        settings, request.app.state.engine, getattr(request.app.state, "redis", None)
+    )
     if result.status == "not_ready":
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return result

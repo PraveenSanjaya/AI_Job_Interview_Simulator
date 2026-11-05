@@ -4,7 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-CheckStatus = Literal["ok", "not_configured", "unchecked", "error"]
+# "degraded": configured but unreachable, while the application keeps working without it.
+CheckStatus = Literal["ok", "not_configured", "unchecked", "degraded", "error"]
 
 
 class LivenessResponse(BaseModel):

@@ -52,6 +52,11 @@ files = ["app", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
+# The optional Redis client is only imported when REDIS_URL is set.
+module = ["redis", "redis.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 # PyMuPDF and python-docx ship without complete type information.
 module = ["tests.samples", "app.documents.extract"]
 disallow_untyped_calls = false

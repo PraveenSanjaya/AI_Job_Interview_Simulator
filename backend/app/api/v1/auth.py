@@ -37,7 +37,7 @@ async def register(
     ip: ClientIpDep,
 ) -> RegistrationAccepted:
     """Always answers 202 with the same body, whether or not the email was taken."""
-    limiter.hit(f"register:ip:{ip}")
+    await limiter.hit(f"register:ip:{ip}")
     await service.register(email=body.email, password=body.password, full_name=body.full_name)
     return RegistrationAccepted()
 
@@ -51,8 +51,8 @@ async def login(
 ) -> TokenResponse:
     # Throttle per client address and per target account (digest keeps raw emails
     # out of limiter state) to slow both credential stuffing and targeted guessing.
-    limiter.hit(f"login:ip:{ip}")
-    limiter.hit(f"login:email:{hashlib.sha256(body.email.encode()).hexdigest()}")
+    await limiter.hit(f"login:ip:{ip}")
+    await limiter.hit(f"login:email:{hashlib.sha256(body.email.encode()).hexdigest()}")
     return await service.login(email=body.email, password=body.password)
 
 
@@ -64,7 +64,7 @@ async def refresh(
     ip: ClientIpDep,
 ) -> TokenResponse:
     """Exchange a refresh token for a new pair. The presented token is single-use."""
-    limiter.hit(f"refresh:ip:{ip}")
+    await limiter.hit(f"refresh:ip:{ip}")
     return await service.refresh(body.refresh_token)
 
 
@@ -76,7 +76,7 @@ async def logout(
     ip: ClientIpDep,
 ) -> None:
     """Revoke the session for this refresh token. Always 204 (idempotent)."""
-    limiter.hit(f"logout:ip:{ip}")
+    await limiter.hit(f"logout:ip:{ip}")
     await service.logout(body.refresh_token)
 
 
@@ -100,6 +100,6 @@ async def delete_account(
     Deletes the profile, resumes (and the stored files), connections, jobs, matches,
     interviews and reports, and ends every session. This cannot be undone.
     """
-    limiter.hit(f"account-delete:user:{user.id}")
+    await limiter.hit(f"account-delete:user:{user.id}")
     files_removed = await service.delete_account(user, body.password)
     return AccountDeletionResult(stored_files_removed=files_removed)

@@ -15,7 +15,13 @@ from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
-from app.core.rate_limit import InMemoryRateLimiter, NoopRateLimiter, RateLimiter
+from app.core.rate_limit import (
+    InMemoryRateLimiter,
+    NoopRateLimiter,
+    RateLimiter,
+    RedisRateLimiter,
+)
+from app.core.redis_client import close_redis_client, create_redis_client
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.session import create_db_engine, create_session_factory
 from app.integrations.github.client import GitHubRestClient
@@ -31,6 +37,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
     await app.state.portfolio_fetcher.aclose()
+    await close_redis_client(app.state.redis)
     if app.state.engine is not None:
         await app.state.engine.dispose()
 
@@ -69,13 +76,24 @@ def create_app() -> FastAPI:
         timeout_seconds=settings.integration_timeout_seconds,
         max_response_bytes=settings.integration_max_response_bytes,
     )
-    limiter: RateLimiter = (
-        InMemoryRateLimiter(
-            settings.auth_rate_limit_attempts, settings.auth_rate_limit_window_seconds
-        )
-        if settings.rate_limit_enabled
-        else NoopRateLimiter()
+    # Redis is optional. With it, rate limits are shared by every worker; without it (or
+    # if it is unreachable at request time) each process counts on its own.
+    app.state.redis = create_redis_client(settings.redis_url)
+    in_process: RateLimiter = InMemoryRateLimiter(
+        settings.auth_rate_limit_attempts, settings.auth_rate_limit_window_seconds
     )
+    limiter: RateLimiter
+    if not settings.rate_limit_enabled:
+        limiter = NoopRateLimiter()
+    elif app.state.redis is not None:
+        limiter = RedisRateLimiter(
+            app.state.redis,
+            settings.auth_rate_limit_attempts,
+            settings.auth_rate_limit_window_seconds,
+            fallback=in_process,
+        )
+    else:
+        limiter = in_process
     app.state.rate_limiter = limiter
     if settings.jwt_secret_is_ephemeral:
         logger.warning(

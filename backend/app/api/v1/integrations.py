@@ -93,7 +93,7 @@ async def connect_github(
     derived from the previous one. Errors: 422 invalid username, 404 user not found,
     429 GitHub rate limit, 502 GitHub unavailable.
     """
-    limiter.hit(f"integration:user:{user.id}")
+    await limiter.hit(f"integration:user:{user.id}")
     source = await service.connect_github(user, body.username)
     return _github_response(service, source)
 
@@ -125,7 +125,7 @@ async def connect_portfolio(
     422 ``portfolio_url_rejected``, 502 ``portfolio_fetch_failed`` (and specific codes
     such as ``portfolio_timeout``).
     """
-    limiter.hit(f"integration:user:{user.id}")
+    await limiter.hit(f"integration:user:{user.id}")
     source = await service.connect_portfolio(user, body.url)
     return _portfolio_response(service, source)
 
@@ -196,7 +196,7 @@ async def create_analysis(
     opinion; claims that the sources do not support were removed
     (``unverified_items_removed``). Neither is a measure of ability.
     """
-    limiter.hit(f"integration-analysis:user:{user.id}")
+    await limiter.hit(f"integration-analysis:user:{user.id}")
     analysis = await runner.run(
         user,
         include=body.include,

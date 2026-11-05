@@ -108,7 +108,7 @@ async def create_job(
     Sites that forbid automated access or require a login (for example LinkedIn and
     Indeed) are refused with ``job_platform_not_supported``: paste the text instead.
     """
-    limiter.hit(f"jobs:user:{user.id}")
+    await limiter.hit(f"jobs:user:{user.id}")
     return job_response(await service.create(user, body))
 
 
@@ -144,7 +144,7 @@ async def update_job(
     """Change the fields you send. Changing the title, text or link re-parses the job and
     discards any earlier AI-enriched analysis (existing match reports are kept as
     historical records of what was compared at the time)."""
-    limiter.hit(f"jobs:user:{user.id}")
+    await limiter.hit(f"jobs:user:{user.id}")
     return job_response(await service.update(user, job_id, body))
 
 
@@ -179,7 +179,7 @@ async def analyze_job(
     ``invalid_ai_response``, 504 ``ai_timeout``, 429 ``ai_rate_limited``. On any error the
     previous analysis is kept.
     """
-    limiter.hit(f"job-analysis:user:{user.id}")
+    await limiter.hit(f"job-analysis:user:{user.id}")
     analysis = await runner.run(
         user, job_id, use_ai=body.use_ai, allow_external_ai=body.allow_external_ai
     )
@@ -232,7 +232,7 @@ async def create_match(
     ``allow_external_ai``), 502 ``invalid_ai_response``, 504 ``ai_timeout``, 429
     ``ai_rate_limited``; on any of them no match is stored.
     """
-    limiter.hit(f"match:user:{user.id}")
+    await limiter.hit(f"match:user:{user.id}")
     return match_response(await service.run(user, job_id, body))
 
 

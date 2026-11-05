@@ -62,7 +62,7 @@ async def upload_resume(
     If the text cannot be extracted (e.g. a scanned PDF), the resume is still created
     with ``status="failed"`` and an ``error_code`` such as ``ocr_required``.
     """
-    limiter.hit(f"resume-upload:user:{user.id}")
+    await limiter.hit(f"resume-upload:user:{user.id}")
     data = await file.read(settings.max_upload_bytes + 1)
     resume = await service.upload(user, file.filename, data)
     return ResumeResponse.model_validate(resume)
@@ -104,7 +104,7 @@ async def analyze_resume(
     * 409: analysis already running, or the text could not be extracted.
     * 502/504/429: invalid AI output, provider timeout, provider rate limit.
     """
-    limiter.hit(f"resume-analyze:user:{user.id}")
+    await limiter.hit(f"resume-analyze:user:{user.id}")
     request_body = body or AnalyzeRequest()
     resume = await service.analyze(
         user, resume_id, allow_external_ai=request_body.allow_external_ai

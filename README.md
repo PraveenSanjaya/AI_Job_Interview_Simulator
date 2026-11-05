@@ -74,11 +74,11 @@ Settings are read from environment variables or a `.env` file (see `.env.example
 | `APP_ENV` | `development` | `development`, `testing` or `production` |
 | `LOG_LEVEL` | `INFO` | Standard Python level names |
 | `DATABASE_URL` | unset | PostgreSQL URL. Unset means database features are unavailable |
-| `REDIS_URL` | unset | Reported by readiness only; not used yet |
+| `REDIS_URL` | unset | Optional. Shares rate-limit counters between workers (needs the `redis` package); the app works without it |
 | `JWT_SECRET_KEY` | unset | **Required (32+ random characters) when `APP_ENV=production`.** Otherwise a random per-process secret is used and a warning is logged |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime |
 | `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime |
-| `RATE_LIMIT_ENABLED` | `true` | In-memory, per-process limiter |
+| `RATE_LIMIT_ENABLED` | `true` | Per-process limiter, or Redis-backed when `REDIS_URL` is set |
 | `AUTH_RATE_LIMIT_ATTEMPTS` / `AUTH_RATE_LIMIT_WINDOW_SECONDS` | `10` / `60` | Limits for auth, upload and analysis endpoints |
 | `STORAGE_BACKEND` / `LOCAL_STORAGE_PATH` | `local` / `./storage` | Uploaded resumes. Keep the path outside any web root. `s3` is not implemented yet |
 | `MAX_UPLOAD_BYTES` | `5242880` | Maximum resume size |

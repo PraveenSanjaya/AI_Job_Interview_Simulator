@@ -111,12 +111,12 @@ Returns the profile's skills: `[{id, name, category: technical|soft, proficiency
 
 `register`, `login`, `refresh` and `logout` are limited per client IP, and `login` additionally per target account. The defaults are 10 attempts per 60 seconds (`AUTH_RATE_LIMIT_ATTEMPTS`, `AUTH_RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_ENABLED`).
 
-The limiter is **in-memory and per process**. It is not shared between workers or hosts, and it is not Redis-backed. It sits behind a `RateLimiter` interface so a Redis implementation can replace it later. Behind a reverse proxy, configure trusted proxy headers on the ASGI server so the client IP is the real one.
+Without `REDIS_URL` the limiter is **in-memory and per process**: not shared between workers or hosts. With `REDIS_URL` set (and the `redis` package installed) the counters live in Redis (a fixed window, updated by one atomic Lua script) and every worker shares them. Keys are SHA-256 digests, so addresses and user ids are not stored in Redis. Redis is never a hard dependency: if it cannot be reached, requests are counted by an in-process limiter instead and a warning is logged (at most once a minute). **The Redis path has been tested only against an in-memory fake, not a real Redis server.** Behind a reverse proxy, configure trusted proxy headers on the ASGI server so the client IP is the real one.
 
 ## Health
 
 - `GET /health/live`: `{"status": "ok"}` while the process is running.
-- `GET /health/ready`: dependency checks. `database` is `ok` only after a real `SELECT 1` succeeds, `error` (HTTP 503) if the probe fails or times out, and `not_configured` if there is no `DATABASE_URL`. `redis` is `not_configured` or `unchecked` (there is no Redis client yet), and is never reported `ok`.
+- `GET /health/ready`: dependency checks. `database` is `ok` only after a real `SELECT 1` succeeds, `error` (HTTP 503) if the probe fails or times out, and `not_configured` if there is no `DATABASE_URL`. `redis` is `not_configured` without a URL, `unchecked` when a URL is set but no client is available (package missing), `ok` after a successful `PING`, and `degraded` when it cannot be reached. `degraded` does not make the service unready, because the application keeps working with per-process rate limiting.
 
 ## Resumes
 
