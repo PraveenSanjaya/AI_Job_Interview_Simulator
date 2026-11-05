@@ -57,7 +57,7 @@ Body: `refresh_token`. Returns a new token pair and **revokes the presented toke
 
 ### POST `/auth/logout` → 204
 
-Body: `refresh_token`. Revokes that login session (its entire token family). Always returns 204, including for unknown or already-revoked tokens, so it does not reveal token validity. Other sessions of the same user remain valid. The short-lived access token is stateless and remains valid until it expires (default 30 minutes).
+Body: `refresh_token`. Revokes that login session (its entire token family). Always returns 204, including for unknown or already-revoked tokens, so it does not reveal token validity. Other sessions of the same user remain valid. Access tokens are bound to the login session that issued them (a `sid` claim), so the access tokens of the session you log out of stop working **immediately** (`401 session_ended`); the same happens when refresh-token reuse is detected and when the account is deleted. Checking this costs one indexed query per authenticated request. Access tokens issued before this binding existed carry no `sid` and remain valid until they expire (at most 30 minutes), so deploying the change signs nobody out.
 
 ### GET `/auth/me` → 200
 

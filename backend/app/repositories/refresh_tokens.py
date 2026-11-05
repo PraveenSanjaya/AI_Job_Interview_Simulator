@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import exists, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import RefreshToken
@@ -50,3 +50,21 @@ class RefreshTokenRepository:
             .where(RefreshToken.family_id == family_id, RefreshToken.revoked_at.is_(None))
             .values(revoked_at=now)
         )
+
+    async def session_is_active(self, family_id: uuid.UUID, now: datetime) -> bool:
+        """True while the login session still holds an unrevoked, unexpired refresh token.
+
+        Rotation revokes the old token and issues a new one in the same family, so a live
+        session always has exactly one such token; logout, detected reuse and account
+        deletion leave none.
+        """
+        result = await self._session.execute(
+            select(
+                exists().where(
+                    RefreshToken.family_id == family_id,
+                    RefreshToken.revoked_at.is_(None),
+                    RefreshToken.expires_at > now,
+                )
+            )
+        )
+        return bool(result.scalar())

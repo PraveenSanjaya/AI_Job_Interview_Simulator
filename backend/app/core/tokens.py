@@ -1,7 +1,11 @@
 """Access-token (JWT) and refresh-token primitives.
 
 * Access tokens are short-lived signed JWTs. The algorithm is pinned on decode, and
-  ``exp``, ``iat``, ``sub``, ``iss`` and ``type`` are all required.
+  ``exp``, ``iat``, ``sub``, ``iss`` and ``type`` are all required. They carry ``sid``, the
+  id of the login session (the refresh-token family) that issued them, so that ending the
+  session (logout, detected token reuse, account deletion) also ends its access tokens
+  immediately instead of at expiry. Tokens issued before ``sid`` existed have none and are
+  accepted until they expire (at most ``JWT_ACCESS_TOKEN_EXPIRE_MINUTES``).
 * Refresh tokens are opaque random strings. Only their SHA-256 digest is stored,
   so a database leak does not expose usable tokens. SHA-256 (not a slow hash) is
   appropriate because the tokens are 384 bits of randomness, not user passwords.
@@ -25,6 +29,7 @@ ACCESS_TOKEN_TYPE = "access"  # noqa: S105
 class AccessTokenClaims:
     user_id: uuid.UUID
     expires_at: datetime
+    session_id: uuid.UUID | None = None  # None only for tokens issued before sessions were bound
 
 
 def _secret(settings: Settings) -> str:
@@ -33,7 +38,11 @@ def _secret(settings: Settings) -> str:
 
 
 def create_access_token(
-    user_id: uuid.UUID, settings: Settings, *, now: datetime | None = None
+    user_id: uuid.UUID,
+    settings: Settings,
+    *,
+    session_id: uuid.UUID | None = None,
+    now: datetime | None = None,
 ) -> tuple[str, int]:
     """Return ``(token, expires_in_seconds)``."""
     issued_at = now or datetime.now(UTC)
@@ -46,6 +55,8 @@ def create_access_token(
         "jti": uuid.uuid4().hex,
         "type": ACCESS_TOKEN_TYPE,
     }
+    if session_id is not None:
+        payload["sid"] = str(session_id)
     token = jwt.encode(payload, _secret(settings), algorithm=settings.jwt_algorithm)
     return token, int(lifetime.total_seconds())
 
@@ -62,9 +73,11 @@ def decode_access_token(token: str, settings: Settings) -> AccessTokenClaims:
         )
         if payload.get("type") != ACCESS_TOKEN_TYPE:
             raise jwt.InvalidTokenError("wrong token type")
+        raw_session = payload.get("sid")
         return AccessTokenClaims(
             user_id=uuid.UUID(payload["sub"]),
             expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
+            session_id=uuid.UUID(raw_session) if raw_session is not None else None,
         )
     except jwt.ExpiredSignatureError:
         raise UnauthorizedError("Access token has expired", code="token_expired") from None

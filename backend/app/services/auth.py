@@ -131,7 +131,9 @@ class AuthService:
 
     def _issue_tokens(self, user_id: uuid.UUID, *, family_id: uuid.UUID) -> TokenResponse:
         """Create an access token and a persisted refresh token (caller commits)."""
-        access_token, expires_in = create_access_token(user_id, self._settings)
+        access_token, expires_in = create_access_token(
+            user_id, self._settings, session_id=family_id
+        )
         refresh_token = generate_refresh_token()
         self._tokens.add(
             RefreshToken(

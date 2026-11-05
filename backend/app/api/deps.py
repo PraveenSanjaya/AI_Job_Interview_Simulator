@@ -1,6 +1,7 @@
 """Shared FastAPI dependencies."""
 
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -15,6 +16,7 @@ from app.core.tokens import decode_access_token
 from app.db.session import get_session
 from app.models import User
 from app.models.enums import UserRole
+from app.repositories.refresh_tokens import RefreshTokenRepository
 from app.repositories.users import UserRepository
 from app.services.auth import AuthService
 
@@ -68,6 +70,13 @@ async def get_current_user(
     # The same error for "deleted" and "disabled" avoids confirming account state.
     if user is None or not user.is_active:
         raise UnauthorizedError("Invalid access token", code="invalid_token")
+    # An access token belongs to one login session. Once that session has been ended
+    # (logout, refresh-token reuse, account deletion) its access tokens stop working at
+    # once instead of lingering until they expire.
+    if claims.session_id is not None and not await RefreshTokenRepository(
+        session
+    ).session_is_active(claims.session_id, datetime.now(UTC)):
+        raise UnauthorizedError("Your session has ended", code="session_ended")
     return user
 
 
