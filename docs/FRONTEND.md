@@ -76,7 +76,7 @@ Honest limits: the journeys run in jsdom, not a real browser (no Playwright/Cypr
 
 ## Known limitations
 
-* The refresh token is in `localStorage` (see above).
+* The refresh token is in `localStorage`; a cookie-based replacement is proposed in `docs/SECURITY_DESIGN_REFRESH_TOKEN.md` (not implemented; needs a same-site hosting decision).
 * No password reset, e-mail verification or profile photo screens: the backend does not offer them yet.
 * Integration analysis (Connections page) analyses all connected sources with an optional CV; choosing a subset (`include`) is not exposed. The standalone resume-to-job comparison options (`resume_id`, `include`, custom weights) are also not exposed; matches use all available evidence with default weights.
 * Integration analysis was tested only against a mocked API: no real AI provider was available, so real model output has not been seen in the UI.
