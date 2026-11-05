@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     auth_rate_limit_attempts: int = Field(default=10, ge=1)
     auth_rate_limit_window_seconds: int = Field(default=60, ge=1)
 
+    # What to do when REDIS_URL is set but Redis cannot be reached while serving a request:
+    # "fallback" counts per process (limits become per instance), "reject" answers 503.
+    rate_limit_on_redis_failure: Literal["fallback", "reject"] = "fallback"
+
     # Sign-in failures per account, across all client addresses. Deliberately much higher than
     # the per-address limits: it only bounds guessing spread over many addresses, and it is
     # the one limit through which an attacker could slow down a victim, so it is generous and

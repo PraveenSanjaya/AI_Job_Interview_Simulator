@@ -80,6 +80,7 @@ Settings are read from environment variables or a `.env` file (see `.env.example
 | `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime |
 | `LOGIN_ACCOUNT_FAILURE_ATTEMPTS` / `LOGIN_ACCOUNT_FAILURE_WINDOW_SECONDS` | `50` / `900` | Failed sign-ins per account across all addresses before sign-in is refused |
 | `FILE_CLEANUP_INTERVAL_SECONDS` | `300` | Retry interval for removing files of deleted accounts (`0` = off; use `python -m app.cleanup`) |
+| `RATE_LIMIT_ON_REDIS_FAILURE` | `fallback` | With Redis configured but unreachable: `fallback` (per-instance limits) or `reject` (503) |
 | `RATE_LIMIT_ENABLED` | `true` | Per-process limiter, or Redis-backed when `REDIS_URL` is set |
 | `AUTH_RATE_LIMIT_ATTEMPTS` / `AUTH_RATE_LIMIT_WINDOW_SECONDS` | `10` / `60` | Limits for auth, upload and analysis endpoints |
 | `STORAGE_BACKEND` / `LOCAL_STORAGE_PATH` | `local` / `./storage` | Uploaded resumes. Keep the path outside any web root. `s3` is not implemented yet |

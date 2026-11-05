@@ -102,7 +102,12 @@ def create_app() -> FastAPI:
         if app.state.redis is None:
             return in_process
         return RedisRateLimiter(
-            app.state.redis, attempts, window, fallback=in_process, prefix=prefix
+            app.state.redis,
+            attempts,
+            window,
+            fallback=in_process,
+            prefix=prefix,
+            on_failure=settings.rate_limit_on_redis_failure,
         )
 
     limiter = build_limiter(

@@ -18,9 +18,9 @@ import math
 import time
 from collections import deque
 from collections.abc import Callable
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
-from app.core.exceptions import TooManyRequestsError
+from app.core.exceptions import ServiceUnavailableError, TooManyRequestsError
 
 logger = logging.getLogger(__name__)
 _MAX_TRACKED_KEYS = 10_000
@@ -128,6 +128,7 @@ class RedisRateLimiter:
         prefix: str = "ratelimit:",
         clock: Callable[[], float] = time.monotonic,
         warn_every_seconds: float = 60.0,
+        on_failure: Literal["fallback", "reject"] = "fallback",
     ) -> None:
         self._client = client
         self._max_attempts = max_attempts
@@ -136,6 +137,7 @@ class RedisRateLimiter:
         self._prefix = prefix
         self._clock = clock
         self._warn_every = warn_every_seconds
+        self._on_failure = on_failure
         self._last_warning: float | None = None
 
     async def hit(self, key: str) -> None:
@@ -145,7 +147,7 @@ class RedisRateLimiter:
                 _REDIS_HIT_SCRIPT, 1, redis_key, self._window_ms
             )
         except Exception:
-            self._warn_unavailable()
+            self._unavailable()
             await self._fallback.hit(key)
             return
         if int(count) > self._max_attempts:
@@ -156,17 +158,36 @@ class RedisRateLimiter:
         try:
             count, ttl_ms = await self._client.eval(_REDIS_PEEK_SCRIPT, 1, redis_key)
         except Exception:
-            self._warn_unavailable()
+            self._unavailable()
             await self._fallback.peek(key)
             return
         if int(count) >= self._max_attempts:
             raise TooManyRequestsError(max(1, math.ceil(max(int(ttl_ms), 0) / 1000)))
 
-    def _warn_unavailable(self) -> None:
+    def _unavailable(self) -> None:
+        """Redis could not be used. Either refuse the request (``reject``) or carry on
+        counting in this process (``fallback``).
+
+        Consequences of ``fallback`` in a multi-instance deployment: every instance
+        counts alone, so the effective limit becomes ``instances x limit``; the counts of
+        different instances diverge; and when Redis returns its counters start from zero,
+        so a client gets a fresh budget. Rate limiting is then *not globally consistent*.
+        ``reject`` keeps the limit exact at the price of failing the rate-limited endpoints
+        (sign-in, registration, uploads, AI calls) while Redis is down.
+        """
+        if self._on_failure == "reject":
+            self._log_failure("Redis rate limiter unavailable; refusing the request (strict mode)")
+            raise ServiceUnavailableError(
+                "Rate limiting is temporarily unavailable. Please try again shortly.",
+                code="rate_limiting_unavailable",
+            )
+        self._log_failure(
+            "Redis rate limiter unavailable; counting in this process instead, so limits are "
+            "no longer consistent across instances"
+        )
+
+    def _log_failure(self, message: str) -> None:
         now = self._clock()
         if self._last_warning is None or now - self._last_warning >= self._warn_every:
             self._last_warning = now
-            logger.warning(
-                "Redis rate limiter unavailable; counting in this process instead",
-                exc_info=True,
-            )
+            logger.warning(message, exc_info=True)

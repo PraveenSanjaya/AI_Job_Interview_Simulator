@@ -15,7 +15,7 @@ import pytest
 from fastapi import FastAPI
 
 from app.core.config import Settings, get_settings
-from app.core.exceptions import TooManyRequestsError
+from app.core.exceptions import ServiceUnavailableError, TooManyRequestsError
 from app.core.rate_limit import InMemoryRateLimiter, RedisRateLimiter
 from app.core.redis_client import create_redis_client
 from app.services.health import check_redis
@@ -258,3 +258,128 @@ async def test_peek_falls_back_when_redis_is_down() -> None:
     await limiter.hit("k")
     with pytest.raises(TooManyRequestsError):
         await limiter.peek("k")
+
+
+# ------------------------------------------------- failure behaviour and its consequences
+
+
+def worker(redis: FakeRedis, attempts: int, **kwargs: Any) -> RedisRateLimiter:
+    """One API instance: its own in-process fallback, the shared Redis."""
+    return RedisRateLimiter(
+        redis, attempts, 60, fallback=InMemoryRateLimiter(attempts, 60), **kwargs
+    )
+
+
+async def test_redis_down_from_the_start_still_limits_each_instance_on_its_own() -> None:
+    """Redis unreachable when the first request arrives (the client connects lazily, so
+    'unreachable at startup' looks exactly like this)."""
+    redis = FakeRedis()
+    redis.fail_with = ConnectionRefusedError("connection refused")
+    limiter = worker(redis, 2)
+    await limiter.hit("k")
+    await limiter.hit("k")
+    with pytest.raises(TooManyRequestsError):
+        await limiter.hit("k")
+
+
+async def test_a_disconnect_in_the_middle_of_a_window_keeps_serving_requests() -> None:
+    redis = FakeRedis()
+    limiter = worker(redis, 5)
+    await limiter.hit("k")  # counted in Redis
+    redis.fail_with = TimeoutError("lost the connection")
+    await limiter.hit("k")  # no error reaches the caller; counted in process
+    redis.fail_with = None
+    await limiter.hit("k")  # back in Redis
+
+
+async def test_consequence_fallback_multiplies_the_limit_by_the_number_of_instances() -> None:
+    """The documented cost of fallback mode: N instances allow N times the limit."""
+    redis = FakeRedis()
+    redis.fail_with = ConnectionError("down")
+    instances = [worker(redis, 3) for _ in range(3)]
+    allowed = 0
+    for instance in instances:
+        for _ in range(10):
+            try:
+                await instance.hit("login:ip:1.2.3.4")
+            except TooManyRequestsError:
+                break
+            allowed += 1
+    assert allowed == 9  # 3 instances x 3, not the configured 3
+
+
+async def test_consequence_counters_start_from_zero_when_redis_returns() -> None:
+    """A client that used up its budget in the fallback gets a fresh Redis budget."""
+    redis = FakeRedis()
+    limiter = worker(redis, 2)
+    redis.fail_with = ConnectionError("down")
+    await limiter.hit("k")
+    await limiter.hit("k")
+    with pytest.raises(TooManyRequestsError):
+        await limiter.hit("k")  # exhausted in process
+    redis.fail_with = None
+    await limiter.hit("k")  # Redis has never seen this client: fresh budget
+    await limiter.hit("k")
+    with pytest.raises(TooManyRequestsError):
+        await limiter.hit("k")
+
+
+async def test_instances_share_again_once_redis_is_back() -> None:
+    redis = FakeRedis()
+    first, second = worker(redis, 2), worker(redis, 2)
+    redis.fail_with = ConnectionError("down")
+    await first.hit("k")
+    await second.hit("k")  # diverged: each saw one hit
+    redis.fail_with = None
+    await first.hit("k")
+    await second.hit("k")
+    with pytest.raises(TooManyRequestsError):
+        await first.hit("k")  # consistent again
+
+
+async def test_strict_mode_refuses_requests_while_redis_is_unavailable() -> None:
+    redis = FakeRedis()
+    limiter = worker(redis, 2, on_failure="reject")
+    await limiter.hit("k")
+    redis.fail_with = ConnectionError("down")
+    with pytest.raises(ServiceUnavailableError) as hit_error:
+        await limiter.hit("k")
+    with pytest.raises(ServiceUnavailableError):
+        await limiter.peek("k")
+    assert hit_error.value.status_code == 503
+    assert hit_error.value.code == "rate_limiting_unavailable"
+    redis.fail_with = None
+    await limiter.hit("k")  # recovers on its own; the limit stayed exact (2 hits so far)
+    with pytest.raises(TooManyRequestsError):
+        await limiter.hit("k")
+
+
+async def test_strict_mode_answers_503_over_http_and_keeps_the_error_free_of_details(
+    app: FastAPI, client: httpx.AsyncClient
+) -> None:
+    redis = FakeRedis()
+    redis.fail_with = ConnectionError("redis://user:secret@internal-host:6379 is down")
+    app.state.rate_limiter = worker(redis, 5, on_failure="reject")
+    response = await client.post(
+        "/api/v1/auth/login", json={"email": "a@example.com", "password": "whatever123"}
+    )
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "rate_limiting_unavailable"
+    assert "secret" not in response.text and "internal-host" not in response.text
+
+
+async def test_fallback_mode_warns_that_limits_are_no_longer_consistent(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    redis = FakeRedis()
+    redis.fail_with = ConnectionError("down")
+    with caplog.at_level(logging.WARNING):
+        await worker(redis, 5).hit("k")
+    assert "no longer consistent across instances" in caplog.text
+
+
+def test_the_failure_mode_is_a_setting_with_a_safe_default() -> None:
+    assert Settings(_env_file=None).rate_limit_on_redis_failure == "fallback"
+    assert Settings(_env_file=None, rate_limit_on_redis_failure="reject")
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, rate_limit_on_redis_failure="ignore")
