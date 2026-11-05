@@ -32,6 +32,14 @@ def get_rate_limiter(request: Request) -> RateLimiter:
 RateLimiterDep = Annotated[RateLimiter, Depends(get_rate_limiter)]
 
 
+def get_login_failure_limiter(request: Request) -> RateLimiter:
+    limiter: RateLimiter = request.app.state.login_failure_limiter
+    return limiter
+
+
+LoginFailureLimiterDep = Annotated[RateLimiter, Depends(get_login_failure_limiter)]
+
+
 def get_llm_provider(request: Request) -> LLMProvider:
     provider: LLMProvider = request.app.state.llm_provider
     return provider

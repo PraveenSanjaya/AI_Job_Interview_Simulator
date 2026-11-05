@@ -109,7 +109,15 @@ Returns the profile's skills: `[{id, name, category: technical|soft, proficiency
 
 ## Rate limiting
 
-`register`, `login`, `refresh` and `logout` are limited per client IP, and `login` additionally per target account. The defaults are 10 attempts per 60 seconds (`AUTH_RATE_LIMIT_ATTEMPTS`, `AUTH_RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_ENABLED`).
+`register`, `login`, `refresh` and `logout` are limited per client IP. The defaults are 10 attempts per 60 seconds (`AUTH_RATE_LIMIT_ATTEMPTS`, `AUTH_RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_ENABLED`).
+
+`login` is throttled so that **nobody can lock someone else out**:
+
+1. all attempts from one address (above);
+2. all attempts for one account **from one address** (same limits). An attacker hammering an account only exhausts their own address's budget for it; the owner signing in from a different address is unaffected;
+3. **failed** attempts for one account from all addresses together, with a deliberately high ceiling (`LOGIN_ACCOUNT_FAILURE_ATTEMPTS`, default 50 per `LOGIN_ACCOUNT_FAILURE_WINDOW_SECONDS`, default 900). Successful sign-ins never count. Unknown e-mail addresses are counted the same way, so the behaviour does not reveal whether an account exists.
+
+Residual risk: guessing spread over many addresses is bounded only by limit 3, and an attacker controlling more than that many addresses can push an account over it and block sign-ins to it until the window ends (the response is `429` with `Retry-After`). Defending against that properly needs something that distinguishes the owner (known devices, a CAPTCHA, or an e-mail unlock link) and has not been built.
 
 Without `REDIS_URL` the limiter is **in-memory and per process**: not shared between workers or hosts. With `REDIS_URL` set (and the `redis` package installed) the counters live in Redis (a fixed window, updated by one atomic Lua script) and every worker shares them. Keys are SHA-256 digests, so addresses and user ids are not stored in Redis. Redis is never a hard dependency: if it cannot be reached, requests are counted by an in-process limiter instead and a warning is logged (at most once a minute). **The Redis path has been tested only against an in-memory fake, not a real Redis server.** Behind a reverse proxy, configure trusted proxy headers on the ASGI server so the client IP is the real one.
 

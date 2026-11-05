@@ -79,21 +79,25 @@ def create_app() -> FastAPI:
     # Redis is optional. With it, rate limits are shared by every worker; without it (or
     # if it is unreachable at request time) each process counts on its own.
     app.state.redis = create_redis_client(settings.redis_url)
-    in_process: RateLimiter = InMemoryRateLimiter(
-        settings.auth_rate_limit_attempts, settings.auth_rate_limit_window_seconds
-    )
-    limiter: RateLimiter
-    if not settings.rate_limit_enabled:
-        limiter = NoopRateLimiter()
-    elif app.state.redis is not None:
-        limiter = RedisRateLimiter(
-            app.state.redis,
-            settings.auth_rate_limit_attempts,
-            settings.auth_rate_limit_window_seconds,
-            fallback=in_process,
+
+    def build_limiter(attempts: int, window: int, prefix: str) -> RateLimiter:
+        in_process = InMemoryRateLimiter(attempts, window)
+        if not settings.rate_limit_enabled:
+            return NoopRateLimiter()
+        if app.state.redis is None:
+            return in_process
+        return RedisRateLimiter(
+            app.state.redis, attempts, window, fallback=in_process, prefix=prefix
         )
-    else:
-        limiter = in_process
+
+    limiter = build_limiter(
+        settings.auth_rate_limit_attempts, settings.auth_rate_limit_window_seconds, "ratelimit:"
+    )
+    app.state.login_failure_limiter = build_limiter(
+        settings.login_account_failure_attempts,
+        settings.login_account_failure_window_seconds,
+        "loginfail:",
+    )
     app.state.rate_limiter = limiter
     if settings.jwt_secret_is_ephemeral:
         logger.warning(

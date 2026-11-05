@@ -44,8 +44,12 @@ class FakeRedis:
         if self.fail_with is not None:
             raise self.fail_with
         assert numkeys == 1
-        key, window_ms = keys_and_args[0], int(keys_and_args[1])
+        key = keys_and_args[0]
         self._expire_due()
+        if "INCR" not in script:  # the read-only peek script: {count, ttl} without counting
+            left = self.expires_at[key] - self.now_ms if key in self.expires_at else -2
+            return [self.counters.get(key, 0), left]
+        window_ms = int(keys_and_args[1])
         self.counters[key] = self.counters.get(key, 0) + 1
         if key not in self.expires_at:
             self.expires_at[key] = self.now_ms + window_ms
@@ -230,3 +234,27 @@ async def test_an_unreachable_redis_does_not_make_the_service_unready(
 
     redis.fail_with = None
     assert (await client.get("/health/ready")).json()["checks"]["redis"]["status"] == "ok"
+
+
+async def test_peek_reads_without_counting_and_blocks_at_the_limit() -> None:
+    redis = FakeRedis()
+    limiter, _ = limiter_for(redis, attempts=2)
+    for _ in range(5):
+        await limiter.peek("k")  # nothing recorded
+    assert redis.counters == {}
+    await limiter.hit("k")
+    await limiter.hit("k")
+    redis.now_ms += 20_000
+    with pytest.raises(TooManyRequestsError) as error:
+        await limiter.peek("k")
+    assert error.value.headers == {"Retry-After": "40"}
+
+
+async def test_peek_falls_back_when_redis_is_down() -> None:
+    redis = FakeRedis()
+    redis.fail_with = ConnectionError("down")
+    limiter, _ = limiter_for(redis, attempts=1)
+    await limiter.peek("k")
+    await limiter.hit("k")
+    with pytest.raises(TooManyRequestsError):
+        await limiter.peek("k")

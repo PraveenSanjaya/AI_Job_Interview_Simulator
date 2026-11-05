@@ -39,9 +39,22 @@ return {count, ttl}
 """
 
 
+# Read-only counterpart of the script above: {count, milliseconds_left}.
+_REDIS_PEEK_SCRIPT = """
+local count = tonumber(redis.call('GET', KEYS[1]) or '0')
+return {count, redis.call('PTTL', KEYS[1])}
+"""
+
+
 class RateLimiter(Protocol):
     async def hit(self, key: str) -> None:
         """Record an attempt for ``key``; raise ``TooManyRequestsError`` if over the limit."""
+        ...
+
+    async def peek(self, key: str) -> None:
+        """Raise ``TooManyRequestsError`` if ``key`` is already at its limit, without
+        recording anything. Used to throttle on *failures* only: check first, then ``hit``
+        when the attempt turns out to have failed."""
         ...
 
 
@@ -57,6 +70,9 @@ class NoopRateLimiter:
     """Used when rate limiting is disabled by configuration."""
 
     async def hit(self, key: str) -> None:
+        return None
+
+    async def peek(self, key: str) -> None:
         return None
 
 
@@ -83,6 +99,16 @@ class InMemoryRateLimiter:
             retry_after = math.ceil(self._window - (now - events[0]))
             raise TooManyRequestsError(retry_after)
         events.append(now)
+
+    async def peek(self, key: str) -> None:
+        events = self._events.get(key)
+        if not events:
+            return
+        now = self._clock()
+        while events and now - events[0] >= self._window:
+            events.popleft()
+        if len(events) >= self._max_attempts:
+            raise TooManyRequestsError(math.ceil(self._window - (now - events[0])))
 
     def _evict_expired(self, now: float) -> None:
         for key in [k for k, v in self._events.items() if not v or now - v[-1] >= self._window]:
@@ -124,6 +150,17 @@ class RedisRateLimiter:
             return
         if int(count) > self._max_attempts:
             raise TooManyRequestsError(max(1, math.ceil(int(ttl_ms) / 1000)))
+
+    async def peek(self, key: str) -> None:
+        redis_key = self._prefix + hashlib.sha256(key.encode()).hexdigest()
+        try:
+            count, ttl_ms = await self._client.eval(_REDIS_PEEK_SCRIPT, 1, redis_key)
+        except Exception:
+            self._warn_unavailable()
+            await self._fallback.peek(key)
+            return
+        if int(count) >= self._max_attempts:
+            raise TooManyRequestsError(max(1, math.ceil(max(int(ttl_ms), 0) / 1000)))
 
     def _warn_unavailable(self) -> None:
         now = self._clock()

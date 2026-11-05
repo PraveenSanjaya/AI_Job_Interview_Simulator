@@ -1,11 +1,20 @@
 """Authentication endpoints."""
 
+import contextlib
 import hashlib
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, status
 
-from app.api.deps import AuthServiceDep, ClientIpDep, CurrentUserDep, RateLimiterDep, SessionDep
+from app.api.deps import (
+    AuthServiceDep,
+    ClientIpDep,
+    CurrentUserDep,
+    LoginFailureLimiterDep,
+    RateLimiterDep,
+    SessionDep,
+)
+from app.core.exceptions import TooManyRequestsError, UnauthorizedError
 from app.schemas.auth import (
     AccountDeletionResult,
     DeleteAccountRequest,
@@ -47,13 +56,31 @@ async def login(
     body: LoginRequest,
     service: AuthServiceDep,
     limiter: RateLimiterDep,
+    failures: LoginFailureLimiterDep,
     ip: ClientIpDep,
 ) -> TokenResponse:
-    # Throttle per client address and per target account (digest keeps raw emails
-    # out of limiter state) to slow both credential stuffing and targeted guessing.
+    """Sign in. Throttling is designed so that nobody can lock someone else out:
+
+    * every attempt from one client address is limited (``login:ip``);
+    * every attempt for one account *from one client address* is limited, so an attacker
+      hammering an account only exhausts their own budget for it;
+    * failed attempts for one account across all addresses are limited by a much higher
+      ceiling, which bounds guessing spread over many addresses.
+
+    The e-mail is hashed so raw addresses never reach limiter state.
+    """
+    account = hashlib.sha256(body.email.encode()).hexdigest()
     await limiter.hit(f"login:ip:{ip}")
-    await limiter.hit(f"login:email:{hashlib.sha256(body.email.encode()).hexdigest()}")
-    return await service.login(email=body.email, password=body.password)
+    await limiter.hit(f"login:account-ip:{account}:{ip}")
+    await failures.peek(f"login-failures:{account}")
+    try:
+        return await service.login(email=body.email, password=body.password)
+    except UnauthorizedError:
+        # If a concurrent request pushed the count over the limit, the next attempt is
+        # refused by peek(); this request still reports the real 401.
+        with contextlib.suppress(TooManyRequestsError):
+            await failures.hit(f"login-failures:{account}")
+        raise
 
 
 @router.post("/refresh", response_model=TokenResponse)
