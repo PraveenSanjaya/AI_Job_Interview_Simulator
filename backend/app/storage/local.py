@@ -4,10 +4,11 @@ import asyncio
 import contextlib
 import os
 import re
+import shutil
 import uuid
 from pathlib import Path
 
-from app.storage.base import InvalidStorageKeyError, StorageNotFoundError
+from app.storage.base import InvalidStorageKeyError, StorageError, StorageNotFoundError
 
 _KEY_PATTERN = re.compile(r"^[0-9a-f]{32}/[0-9a-f]{32}$")
 
@@ -54,6 +55,23 @@ class LocalStorage:
             return await asyncio.to_thread(path.read_bytes)
         except FileNotFoundError:
             raise StorageNotFoundError("Object not found") from None
+
+    async def delete_namespace(self, owner_id: uuid.UUID) -> int:
+        directory = (self._root / owner_id.hex).resolve()
+        if directory.parent != self._root:
+            raise InvalidStorageKeyError("Invalid storage namespace")
+        try:
+            return await asyncio.to_thread(self._remove_tree, directory)
+        except OSError:
+            raise StorageError("Could not remove all stored files") from None
+
+    @staticmethod
+    def _remove_tree(directory: Path) -> int:
+        if not directory.is_dir():
+            return 0
+        count = sum(1 for p in directory.rglob("*") if p.is_file() and not p.name.endswith(".tmp"))
+        shutil.rmtree(directory)
+        return count
 
     async def delete(self, key: str) -> None:
         path = self._path(key)

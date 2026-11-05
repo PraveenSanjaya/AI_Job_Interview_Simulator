@@ -70,7 +70,7 @@ Nothing is applied automatically. The analysis includes a `profile_suggestion` i
 
 - `DELETE /resumes/{id}` removes the database rows (resume and analysis, by cascade) and then deletes the stored file. If the file deletion fails after the database commit, the failure is logged by storage key (not filename) and the file is orphaned; an orphan sweep is not implemented yet.
 - If the database write fails during upload, the freshly stored file is removed again.
-- Deleting a **user** removes their rows by database cascade, but this does **not** delete stored files, because no account-deletion flow exists yet. Whoever implements account deletion must delete each resume's stored file (via the service) first. This is a known gap.
+- Deleting an **account** (`POST /auth/delete-account`) removes the rows by database cascade and then deletes the user's whole storage namespace (`<owner hex>/`), which also removes files no database row refers to any more. If file removal fails, the response reports `stored_files_removed: false` and the failure is logged; see `docs/API_DOCUMENTATION.md`.
 - Backups, if any, are outside the application's control.
 - The AI provider's own retention of submitted text is governed by that provider's terms; this is why external processing requires explicit consent per request.
 

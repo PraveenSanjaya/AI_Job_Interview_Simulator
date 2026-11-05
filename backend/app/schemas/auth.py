@@ -82,3 +82,19 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"  # noqa: S105
     expires_in: int = Field(description="Access token lifetime in seconds")
+
+
+class DeleteAccountRequest(BaseModel):
+    """Deleting an account is irreversible, so the current password is required again."""
+
+    password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
+
+
+class AccountDeletionResult(BaseModel):
+    deleted: bool = True
+    stored_files_removed: bool = Field(
+        description=(
+            "False when the account was deleted but some uploaded files could not be removed "
+            "yet; they are no longer reachable through the application."
+        )
+    )

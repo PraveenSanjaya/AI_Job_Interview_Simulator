@@ -1,11 +1,14 @@
 """Authentication endpoints."""
 
 import hashlib
+from typing import Annotated
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, Request, status
 
-from app.api.deps import AuthServiceDep, ClientIpDep, CurrentUserDep, RateLimiterDep
+from app.api.deps import AuthServiceDep, ClientIpDep, CurrentUserDep, RateLimiterDep, SessionDep
 from app.schemas.auth import (
+    AccountDeletionResult,
+    DeleteAccountRequest,
     LoginRequest,
     LogoutRequest,
     RefreshRequest,
@@ -14,8 +17,16 @@ from app.schemas.auth import (
     TokenResponse,
     UserResponse,
 )
+from app.services.account import AccountService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def get_account_service(request: Request, session: SessionDep) -> AccountService:
+    return AccountService(session, request.app.state.storage)
+
+
+AccountServiceDep = Annotated[AccountService, Depends(get_account_service)]
 
 
 @router.post("/register", response_model=RegistrationAccepted, status_code=status.HTTP_202_ACCEPTED)
@@ -73,3 +84,22 @@ async def logout(
 async def me(user: CurrentUserDep) -> UserResponse:
     """The authenticated user's account."""
     return UserResponse.model_validate(user)
+
+
+@router.post("/delete-account", response_model=AccountDeletionResult)
+async def delete_account(
+    body: DeleteAccountRequest,
+    user: CurrentUserDep,
+    service: AccountServiceDep,
+    limiter: RateLimiterDep,
+) -> AccountDeletionResult:
+    """Permanently delete your account and all of your data. Requires your password.
+
+    * 403 ``incorrect_password``: nothing was deleted.
+
+    Deletes the profile, resumes (and the stored files), connections, jobs, matches,
+    interviews and reports, and ends every session. This cannot be undone.
+    """
+    limiter.hit(f"account-delete:user:{user.id}")
+    files_removed = await service.delete_account(user, body.password)
+    return AccountDeletionResult(stored_files_removed=files_removed)

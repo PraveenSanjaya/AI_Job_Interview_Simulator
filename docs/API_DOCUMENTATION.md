@@ -63,6 +63,14 @@ Body: `refresh_token`. Revokes that login session (its entire token family). Alw
 
 Requires a Bearer token. Returns the authenticated user (`id, email, role, is_active, created_at`).
 
+### POST `/auth/delete-account` → 200
+
+Requires a Bearer token **and** the account password: body `{"password": "..."}`. Permanently deletes the account and everything it owns: profile, resumes and their stored files, connections and analyses, jobs, matches, interviews, answers, evaluations, reports and all sessions. It cannot be undone, and the e-mail address can be registered again as a new, empty account.
+
+* `403 incorrect_password`: nothing was deleted. (403, not 401, so a client does not mistake it for an expired session.) Rate limited per user.
+* Response `{"deleted": true, "stored_files_removed": true}`. If the database deletion succeeded but removing the uploaded files failed, `stored_files_removed` is `false`: the account is gone and the files are unreachable through the application, and the error is logged with the opaque storage namespace (`<owner uuid hex>`) so an operator can remove that directory.
+* The database is changed first, in one transaction; files are removed only afterwards. A database failure therefore leaves the account and its files intact.
+
 ## Candidate profile
 
 All profile endpoints act on the **authenticated user's own profile**. There is no profile id in any URL, so one user cannot address another's data. All require a Bearer token.

@@ -36,6 +36,14 @@ class StorageBackend(Protocol):
         """Delete the object. Deleting a missing object is not an error."""
         ...
 
+    async def delete_namespace(self, owner_id: uuid.UUID) -> int:
+        """Delete every object stored for ``owner_id`` (all keys from ``new_storage_key``).
+
+        Returns how many objects were removed. An owner with no objects is not an error.
+        Raises ``StorageError`` if something could not be removed.
+        """
+        ...
+
 
 def new_storage_key(owner_id: uuid.UUID) -> str:
     """``<owner hex>/<random hex>``: namespaced per owner, unguessable, path-safe."""
