@@ -49,7 +49,10 @@ http.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const original = error.config as Retriable | undefined;
-    const isAuthCall = original?.url?.startsWith('/auth/') ?? false;
+    // Sign-in, refresh and logout must never trigger a refresh; the account deletion call
+    // is an ordinary authenticated request and may.
+    const isAuthCall =
+      (original?.url?.startsWith('/auth/') ?? false) && original?.url !== '/auth/delete-account';
     if (error.response?.status === 401 && original && !original._retried && !isAuthCall) {
       original._retried = true;
       try {

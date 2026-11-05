@@ -23,6 +23,8 @@ interface AuthValue {
   login: (email: string, password: string) => Promise<void>;
   register: (input: { email: string; password: string; full_name: string }) => Promise<void>;
   logout: () => Promise<void>;
+  /** Permanently deletes the account. Resolves to whether every stored file was removed. */
+  deleteAccount: (password: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -100,9 +102,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOutLocally(false);
   }, [signOutLocally]);
 
+  const deleteAccount = useCallback(
+    async (password: string) => {
+      const result = await authApi.deleteAccount(password);
+      signOutLocally(false);
+      return result.stored_files_removed;
+    },
+    [signOutLocally],
+  );
+
   const value = useMemo(
-    () => ({ status, user, sessionExpired, login, register, logout }),
-    [status, user, sessionExpired, login, register, logout],
+    () => ({ status, user, sessionExpired, login, register, logout, deleteAccount }),
+    [status, user, sessionExpired, login, register, logout, deleteAccount],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

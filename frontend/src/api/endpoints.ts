@@ -39,6 +39,12 @@ export const authApi = {
   logout: (refresh_token: string) =>
     http.post('/auth/logout', { refresh_token }).then(() => undefined),
   me: () => http.get<User>('/auth/me').then(data),
+  deleteAccount: (password: string) =>
+    http
+      .post<{ deleted: boolean; stored_files_removed: boolean }>('/auth/delete-account', {
+        password,
+      })
+      .then(data),
 };
 
 export const profileApi = {

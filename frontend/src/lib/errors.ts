@@ -65,6 +65,7 @@ export function toApiError(error: unknown): ApiError {
 
 const FRIENDLY: Record<string, string> = {
   invalid_credentials: 'The email or password is incorrect.',
+  incorrect_password: 'The password is incorrect. Nothing was deleted.',
   rate_limited: 'Too many attempts. Please wait a moment and try again.',
   ai_unavailable: 'AI features are not available on this server right now.',
   ai_consent_required:

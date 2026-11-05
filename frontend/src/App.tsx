@@ -33,6 +33,9 @@ const JobDetailPage = lazy(() =>
 );
 const JobsPage = lazy(() => import('@/pages/JobsPages').then((m) => ({ default: m.JobsPage })));
 const NewJobPage = lazy(() => import('@/pages/JobsPages').then((m) => ({ default: m.NewJobPage })));
+const AccountPage = lazy(() =>
+  import('@/pages/AccountPage').then((m) => ({ default: m.AccountPage })),
+);
 const ProfilePage = lazy(() =>
   import('@/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })),
 );
@@ -66,6 +69,7 @@ export function App() {
           <Route element={<AppShell />}>
             <Route index element={<DashboardPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="account" element={<AccountPage />} />
             <Route path="resumes" element={<ResumesPage />} />
             <Route path="connections" element={<ConnectionsPage />} />
             <Route path="jobs" element={<JobsPage />} />

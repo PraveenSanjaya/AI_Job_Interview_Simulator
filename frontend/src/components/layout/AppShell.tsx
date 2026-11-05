@@ -6,6 +6,7 @@ import {
   LogOut,
   Menu,
   MessagesSquare,
+  Settings,
   UserRound,
   X,
 } from 'lucide-react';
@@ -22,6 +23,7 @@ const NAV = [
   { to: '/connections', label: 'Connections', icon: Github },
   { to: '/jobs', label: 'Jobs', icon: Briefcase },
   { to: '/interviews', label: 'Interviews', icon: MessagesSquare },
+  { to: '/account', label: 'Account', icon: Settings },
 ];
 
 export function AppShell() {

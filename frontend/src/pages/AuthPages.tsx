@@ -43,7 +43,12 @@ export function LoginPage() {
   const { login, sessionExpired } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/';
+  const state = location.state as {
+    from?: string;
+    accountDeleted?: boolean;
+    filesPending?: boolean;
+  } | null;
+  const from = state?.from ?? '/';
   const [error, setError] = useState<string | null>(null);
   const {
     register,
@@ -75,6 +80,13 @@ export function LoginPage() {
       }
     >
       <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} noValidate className="space-y-4">
+        {state?.accountDeleted && (
+          <Alert tone="success" title="Your account was deleted">
+            {state.filesPending
+              ? 'All of your data was removed. Some uploaded files could not be deleted yet and will need to be removed by the administrator; they are no longer reachable.'
+              : 'All of your data and uploaded files were removed.'}
+          </Alert>
+        )}
         {sessionExpired && (
           <Alert tone="warning" title="Your session expired">
             Please sign in again to continue.
