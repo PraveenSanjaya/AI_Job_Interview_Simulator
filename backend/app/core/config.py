@@ -88,6 +88,8 @@ class Settings(BaseSettings):
     storage_backend: Literal["local", "s3"] = "local"
     local_storage_path: str = "./storage"
     max_upload_bytes: int = Field(default=5 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024)
+    # Cap for every non-upload request body (JSON documents).
+    max_json_body_bytes: int = Field(default=1024 * 1024, ge=16 * 1024, le=10 * 1024 * 1024)
 
     frontend_url: str = "http://localhost:5173"
     # Extra browser origins allowed to call the API (JSON list). ``frontend_url`` is always allowed.

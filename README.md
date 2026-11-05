@@ -82,6 +82,7 @@ Settings are read from environment variables or a `.env` file (see `.env.example
 | `AUTH_RATE_LIMIT_ATTEMPTS` / `AUTH_RATE_LIMIT_WINDOW_SECONDS` | `10` / `60` | Limits for auth, upload and analysis endpoints |
 | `STORAGE_BACKEND` / `LOCAL_STORAGE_PATH` | `local` / `./storage` | Uploaded resumes. Keep the path outside any web root. `s3` is not implemented yet |
 | `MAX_UPLOAD_BYTES` | `5242880` | Maximum resume size |
+| `MAX_JSON_BODY_BYTES` | `1048576` | Maximum size of every other request body |
 | `AI_PROVIDER` | `none` | `none` or `openai`. AI is optional; everything except analysis works without it |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | unset | Both required when `AI_PROVIDER=openai`. No default model is assumed |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint. `localhost` endpoints are treated as local (no consent prompt) |

@@ -16,6 +16,7 @@ from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.core.rate_limit import InMemoryRateLimiter, NoopRateLimiter, RateLimiter
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.session import create_db_engine, create_session_factory
 from app.integrations.github.client import GitHubRestClient
 from app.integrations.portfolio.safe_fetch import SafeFetcher
@@ -38,11 +39,15 @@ def create_app() -> FastAPI:
     """Application factory; keeps construction testable."""
     settings = get_settings()
     configure_logging(settings.log_level)
+    production = settings.app_env == "production"
     app = FastAPI(
         title=settings.app_name,
         version="0.1.0",
-        docs_url="/docs",
-        openapi_url="/openapi.json",
+        # The interactive API documentation is a development aid; it is not published in
+        # production, where it would hand attackers a complete map of the API.
+        docs_url=None if production else "/docs",
+        redoc_url=None,
+        openapi_url=None if production else "/openapi.json",
         lifespan=lifespan,
     )
     # The engine connects lazily, so creating it never requires a running database.
@@ -84,6 +89,17 @@ def create_app() -> FastAPI:
         max_bytes=settings.max_upload_bytes + MULTIPART_OVERHEAD_BYTES,
         path_prefix=f"{API_V1_PREFIX}/resumes",
     )
+    # Every other endpoint takes small JSON documents (the largest field is 30,000
+    # characters), so cap them well below the upload limit. Without this a client could
+    # make the server buffer an arbitrarily large body before validation, even before
+    # signing in.
+    app.add_middleware(
+        MaxBodySizeMiddleware,
+        max_bytes=settings.max_json_body_bytes,
+        path_prefix="/",
+        exclude_prefixes=(f"{API_V1_PREFIX}/resumes",),
+    )
+    app.add_middleware(SecurityHeadersMiddleware, api_prefix=API_V1_PREFIX)
     app.add_middleware(RequestContextMiddleware)
     # Outermost, so preflights and even error responses carry the CORS headers. Only the
     # configured browser origins are allowed; credentials (cookies) are not used: the API

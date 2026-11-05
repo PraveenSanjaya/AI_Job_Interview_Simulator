@@ -14,13 +14,24 @@ from app.core.exceptions import PayloadTooLargeError
 
 
 class MaxBodySizeMiddleware:
-    def __init__(self, app: ASGIApp, *, max_bytes: int, path_prefix: str) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        max_bytes: int,
+        path_prefix: str,
+        exclude_prefixes: tuple[str, ...] = (),
+    ) -> None:
         self.app = app
         self._max_bytes = max_bytes
         self._prefix = path_prefix
+        self._excluded = exclude_prefixes
+
+    def _applies(self, path: str) -> bool:
+        return path.startswith(self._prefix) and not path.startswith(self._excluded)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or not scope["path"].startswith(self._prefix):
+        if scope["type"] != "http" or not self._applies(scope["path"]):
             await self.app(scope, receive, send)
             return
 

@@ -1,6 +1,8 @@
 # API Documentation
 
-Interactive documentation is served by the running backend at `/docs` (Swagger UI) and `/openapi.json`. This file describes behaviour that the schema alone does not.
+Interactive documentation is served by the running backend at `/docs` (Swagger UI) and `/openapi.json` **in development only**; with `APP_ENV=production` those routes do not exist. This file describes behaviour that the schema alone does not.
+
+**Request size and response headers.** Resume uploads are capped by `MAX_UPLOAD_BYTES` (plus multipart overhead). Every other request body, including the unauthenticated sign-in and registration calls, is capped at `MAX_JSON_BODY_BYTES` (default 1 MiB) and answered with `413 payload_too_large` once exceeded. All responses carry `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` and a `default-src 'none'` Content-Security-Policy, and API responses (which can contain tokens and personal data) are sent with `Cache-Control: no-store`.
 
 Base path: `/api/v1`. Health endpoints are unversioned (`/health/live`, `/health/ready`).
 
