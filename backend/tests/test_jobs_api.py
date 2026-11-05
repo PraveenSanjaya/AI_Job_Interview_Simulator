@@ -291,7 +291,8 @@ async def test_users_cannot_see_or_change_each_others_jobs(client: httpx.AsyncCl
         ("PUT", f"{JOBS}/{job_id}", {"json": {"title": "Hijacked"}}),
         ("DELETE", f"{JOBS}/{job_id}", {}),
     ]:
-        response = await client.request(method, path, headers=eve, **kwargs)
+        options: dict[str, Any] = kwargs
+        response = await client.request(method, path, headers=eve, **options)
         assert response.status_code == 404, (method, path)
         assert response.json()["error"]["code"] == "job_not_found"
 

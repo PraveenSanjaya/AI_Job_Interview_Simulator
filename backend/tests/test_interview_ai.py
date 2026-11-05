@@ -64,7 +64,7 @@ async def generate(
     count: int = 3,
     ctx: InterviewContext | None = None,
     avoid: list[str] | None = None,
-):  # type: ignore[no-untyped-def]
+) -> Any:
     fake = provider(reply)
     result = await AIQuestionGenerator(fake).generate(
         ctx or context(), types or ["technical"], "intermediate", count, avoid or []
@@ -279,7 +279,7 @@ def eval_reply(**overrides: Any) -> dict[str, Any]:
 
 async def evaluate(
     reply: Any, answer: str = "Add an index on every column.", category: str = "technical"
-):  # type: ignore[no-untyped-def]
+) -> Any:
     fake = provider(reply)
     result = await AIAnswerEvaluator(fake).evaluate(
         question="How would you index a large orders table?",
@@ -347,7 +347,7 @@ def test_injection_and_similarity_helpers() -> None:
 # --------------------------------------------------------------------- feedback
 
 
-def a_report():  # type: ignore[no-untyped-def]
+def a_report() -> Any:
     rec = Record("q0", 0, 0, "technical", "How would you index a table?", ["sql"], ["x"], answered=True,
                  eval_status=EvaluationStatus.EVALUATED,
                  evaluation=EvaluationResult.model_validate({"dimensions": {"clarity": {"score": 4}}}))  # fmt: skip

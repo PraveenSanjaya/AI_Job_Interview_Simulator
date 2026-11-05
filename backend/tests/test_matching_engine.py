@@ -72,7 +72,7 @@ def match(
 
 
 def repo(name: str, **fields: object) -> RepositoryFact:
-    return RepositoryFact(name=name, url=f"https://github.com/jane/{name}", **fields)  # type: ignore[arg-type]
+    return RepositoryFact(name=name, url=f"https://github.com/jane/{name}", **fields)
 
 
 def github_with(*repos: RepositoryFact, bio: str | None = None) -> GitHubSnapshot:
@@ -590,7 +590,7 @@ def test_improvement_areas_prioritise_required_gaps() -> None:
     areas = report.improvement_areas
     assert areas
     priorities = [a.priority for a in areas]
-    assert priorities == sorted(priorities, key={"high": 0, "medium": 1, "low": 2}.get)
+    assert priorities == sorted(priorities, key=lambda p: {"high": 0, "medium": 1, "low": 2}[p])
     topics = {a.topic: a for a in areas}
     assert topics["Python"].priority == "high"
     assert topics["Docker"].priority == "medium"  # listed but not shown

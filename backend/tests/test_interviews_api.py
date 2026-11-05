@@ -608,7 +608,8 @@ async def test_sessions_are_private_to_their_owner(client: httpx.AsyncClient) ->
         ("GET", "/evaluations", {}),
         ("POST", "/answers", {"json": {"question_id": question["id"], "text": "stolen"}}),
     ]:
-        response = await client.request(method, f"{IV}/{sid}{path}", headers=eve, **kwargs)
+        options: dict[str, Any] = kwargs
+        response = await client.request(method, f"{IV}/{sid}{path}", headers=eve, **options)
         assert response.status_code == 404, (method, path)
         assert response.json()["error"]["code"] == "interview_not_found"
     assert (await client.get(f"{IV}/{sid}/report", headers=ada)).status_code == 200
