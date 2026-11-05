@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { integrationApi } from '@/api/endpoints';
 import { keys, useApiMutation, useGithub, usePortfolio } from '@/api/queries';
 import type { GitHubSource, PortfolioSource } from '@/api/types';
+import { IntegrationAnalysisCard } from '@/components/IntegrationAnalysisCard';
 import {
   Alert,
   Badge,
@@ -29,6 +30,7 @@ export function ConnectionsPage() {
       <div className="space-y-6">
         <GithubCard />
         <PortfolioCard />
+        <IntegrationAnalysisCard />
       </div>
     </>
   );

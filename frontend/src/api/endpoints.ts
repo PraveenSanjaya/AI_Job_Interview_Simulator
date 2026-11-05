@@ -3,6 +3,8 @@ import type {
   AnswerSubmitted,
   ApplyRequest,
   ApplyResult,
+  IntegrationAnalysis,
+  IntegrationAnalysisSummary,
   CurrentQuestion,
   Evaluation,
   GitHubSource,
@@ -68,6 +70,14 @@ export const integrationApi = {
   connectPortfolio: (url: string) =>
     http.post<PortfolioSource>('/integrations/portfolio', { url }).then(data),
   disconnectPortfolio: () => http.delete('/integrations/portfolio').then(() => undefined),
+  analyses: () => http.get<IntegrationAnalysisSummary[]>('/integrations/analysis').then(data),
+  analysis: (id: string) =>
+    http.get<IntegrationAnalysis>(`/integrations/analysis/${id}`).then(data),
+  analyze: (body: { resume_id?: string; allow_external_ai: boolean }) =>
+    http.post<IntegrationAnalysis>('/integrations/analysis', body).then(data),
+  removeAnalysis: (id: string) => http.delete(`/integrations/analysis/${id}`).then(() => undefined),
+  applyAnalysis: (id: string, body: ApplyRequest) =>
+    http.post<ApplyResult>(`/integrations/analysis/${id}/apply-to-profile`, body).then(data),
 };
 
 export const jobApi = {

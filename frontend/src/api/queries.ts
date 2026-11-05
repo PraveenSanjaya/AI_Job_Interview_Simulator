@@ -8,6 +8,8 @@ export const keys = {
   resumeAnalysis: (id: string) => ['resumes', id, 'analysis'] as const,
   github: ['integrations', 'github'] as const,
   portfolio: ['integrations', 'portfolio'] as const,
+  analyses: ['integrations', 'analysis'] as const,
+  analysisDetail: (id: string) => ['integrations', 'analysis', id] as const,
   jobs: ['jobs'] as const,
   job: (id: string) => ['jobs', id] as const,
   jobAnalysis: (id: string) => ['jobs', id, 'analysis'] as const,
@@ -40,6 +42,14 @@ export const useGithub = () =>
   useQuery({ queryKey: keys.github, queryFn: () => orNull(integrationApi.github) });
 export const usePortfolio = () =>
   useQuery({ queryKey: keys.portfolio, queryFn: () => orNull(integrationApi.portfolio) });
+export const useIntegrationAnalyses = () =>
+  useQuery({ queryKey: keys.analyses, queryFn: integrationApi.analyses });
+export const useIntegrationAnalysis = (id: string | undefined) =>
+  useQuery({
+    queryKey: keys.analysisDetail(id ?? ''),
+    queryFn: () => integrationApi.analysis(id as string),
+    enabled: Boolean(id),
+  });
 export const useJobs = () => useQuery({ queryKey: keys.jobs, queryFn: jobApi.list });
 export const useJob = (id: string) =>
   useQuery({ queryKey: keys.job(id), queryFn: () => jobApi.get(id) });

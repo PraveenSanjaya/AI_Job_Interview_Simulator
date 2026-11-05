@@ -534,3 +534,73 @@ export interface InterviewReport {
   overall_score: number | null;
   report: InterviewReportData;
 }
+
+// ------------------------------------------------- integration analysis
+export interface SourceReference {
+  source: 'github' | 'portfolio' | 'resume';
+  ref: string | null;
+}
+export interface IntegrationAnalysisSummary {
+  id: string;
+  created_at: string;
+  provider: string;
+  model: string;
+  sources_used: string[];
+}
+export interface IntegrationAnalysis {
+  id: string;
+  created_at: string;
+  provider: string;
+  model: string;
+  consent_external_ai: boolean;
+  input_truncated: boolean;
+  github_source_id: string | null;
+  portfolio_source_id: string | null;
+  resume_id: string | null;
+  result: {
+    facts: {
+      sources_used: string[];
+      github: {
+        login: string;
+        profile_url: string;
+        own_repositories_considered: number;
+        language_distribution: Record<string, number>;
+        notable_repositories: {
+          name: string;
+          url: string;
+          description: string | null;
+          primary_language: string | null;
+          stars: number;
+        }[];
+        own_repos_pushed_last_365_days: number;
+        note: string;
+      } | null;
+      portfolio: { host: string; pages: { url: string; title: string | null }[] } | null;
+      consistency: {
+        cv_skills_with_public_evidence: { skill: string; found_in: SourceReference[] }[];
+        cv_skills_without_public_evidence: string[];
+        note: string;
+      } | null;
+    };
+    assessment: {
+      summary: string | null;
+      strengths: string[];
+      potential_skill_gaps: string[];
+      project_assessments: {
+        name: string | null;
+        source: SourceReference;
+        technologies_demonstrated: string[];
+        what_it_shows: string | null;
+        relevance: string | null;
+        complexity: 'basic' | 'moderate' | 'advanced' | 'unclear';
+        complexity_basis: string | null;
+      }[];
+      demonstrated_skills: { name: string | null; evidence: SourceReference[] }[];
+      consistency_notes: string[];
+      caveats: string[];
+    };
+    unverified_items_removed: number;
+  };
+  profile_suggestion: ProfileSuggestion | null;
+  suggestion_notes: string[];
+}

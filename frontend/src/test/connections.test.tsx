@@ -2,7 +2,21 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import type { GitHubSource, PortfolioSource } from '@/api/types';
-import { api, errorBody, renderApp, signedInHandlers, useHandlers } from './utils';
+import {
+  api,
+  errorBody,
+  renderApp,
+  signedInHandlers,
+  useHandlers as useBaseHandlers,
+} from './utils';
+
+/** Every test starts with no resumes and no saved analyses unless it says otherwise. */
+const useHandlers = (...handlers: Parameters<typeof useBaseHandlers>) =>
+  useBaseHandlers(
+    ...handlers,
+    http.get(api('/integrations/analysis'), () => HttpResponse.json([])),
+    http.get(api('/resumes'), () => HttpResponse.json([])),
+  );
 
 const GITHUB: GitHubSource = {
   source_ref: 'janedoe',
@@ -111,7 +125,7 @@ describe('connections', () => {
     expect(sent).toEqual({ username: '@janedoe' });
     expect(screen.getByText('interview-sim')).toBeInTheDocument();
     expect(screen.queryByText('forked-lib')).toBeNull(); // forks are not shown as the candidate's work
-    expect(screen.getByText(/not a measure of ability/)).toBeInTheDocument();
+    expect(screen.getByText(/Counts describe public repositories/)).toBeInTheDocument();
     expect(screen.getByText('Connected')).toBeInTheDocument();
   });
 
@@ -191,6 +205,200 @@ describe('connections', () => {
     await user.click(screen.getByRole('button', { name: 'Disconnect' }));
     await user.click(
       within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Disconnect' }),
+    );
+    await waitFor(() => expect(removed).toBe(1));
+  });
+});
+
+const ANALYSIS = {
+  id: 'an-1',
+  created_at: '2026-03-02T10:00:00Z',
+  provider: 'openai',
+  model: 'test-model',
+  consent_external_ai: false,
+  input_truncated: false,
+  github_source_id: 'g1',
+  portfolio_source_id: null,
+  resume_id: null,
+  result: {
+    facts: {
+      sources_used: ['github'],
+      github: {
+        login: 'janedoe',
+        profile_url: 'https://github.com/janedoe',
+        own_repositories_considered: 4,
+        language_distribution: { Python: 2 },
+        notable_repositories: [],
+        own_repos_pushed_last_365_days: 2,
+        note: 'Counts of public repositories; not a measure of programming ability.',
+      },
+      portfolio: null,
+      consistency: null,
+    },
+    assessment: {
+      summary: 'Backend-focused public work.',
+      strengths: ['Consistent Python projects'],
+      potential_skill_gaps: [],
+      project_assessments: [
+        {
+          name: 'interview-sim',
+          source: { source: 'github', ref: 'interview-sim' },
+          technologies_demonstrated: ['Python'],
+          what_it_shows: 'An API with tests.',
+          relevance: null,
+          complexity: 'moderate',
+          complexity_basis: null,
+        },
+      ],
+      demonstrated_skills: [
+        { name: 'Python', evidence: [{ source: 'github', ref: 'interview-sim' }] },
+      ],
+      consistency_notes: [],
+      caveats: ['Private work is not visible.'],
+    },
+    unverified_items_removed: 1,
+  },
+  profile_suggestion: { skills: [{ name: 'Python', category: 'technical', level: null }] },
+  suggestion_notes: [],
+};
+
+describe('integration analysis', () => {
+  const githubOnly = () => [
+    ...signedInHandlers(),
+    http.get(api('/integrations/github'), () => HttpResponse.json(GITHUB)),
+    http.get(api('/integrations/portfolio'), () => errorBody('source_not_connected', 'x', 404)),
+  ];
+
+  it('asks the user to connect a source first', async () => {
+    useHandlers(...notConnected());
+    renderApp('/connections');
+    expect(await screen.findByText(/Connect GitHub or a portfolio above/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Analyse my sources' })).toBeNull();
+  });
+
+  it('sends the consent choice and shows facts, opinion and evidence separately', async () => {
+    let created = false;
+    let sent: unknown;
+    useHandlers(
+      ...githubOnly(),
+      http.post(api('/integrations/analysis'), async ({ request }) => {
+        sent = await request.json();
+        created = true;
+        return HttpResponse.json(ANALYSIS, { status: 201 });
+      }),
+      http.get(api('/integrations/analysis'), () =>
+        HttpResponse.json(
+          created
+            ? [
+                {
+                  id: 'an-1',
+                  created_at: ANALYSIS.created_at,
+                  provider: 'openai',
+                  model: 'm',
+                  sources_used: ['github'],
+                },
+              ]
+            : [],
+        ),
+      ),
+      http.get(api('/integrations/analysis/an-1'), () => HttpResponse.json(ANALYSIS)),
+    );
+    renderApp('/connections');
+    const user = userEvent.setup();
+    await user.click(await screen.findByLabelText(/Allow my public source data/));
+    await user.click(screen.getByRole('button', { name: 'Analyse my sources' }));
+    expect(await screen.findByText('Backend-focused public work.')).toBeInTheDocument();
+    expect(sent).toEqual({ allow_external_ai: true });
+    expect(screen.getByText('Facts read from your sources')).toBeInTheDocument();
+    expect(screen.getByText('AI assessment')).toBeInTheDocument();
+    expect(
+      screen.getByText(/1 claim\(s\) the sources did not support were removed/),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Evidence: GitHub: interview-sim')).toBeInTheDocument();
+    expect(screen.getByText('Private work is not visible.')).toBeInTheDocument();
+  });
+
+  it('says honestly when no AI provider is configured', async () => {
+    useHandlers(
+      ...githubOnly(),
+      http.post(api('/integrations/analysis'), () =>
+        errorBody('ai_unavailable', 'No AI provider is configured on this server', 503),
+      ),
+    );
+    renderApp('/connections');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Analyse my sources' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'AI features are not available on this server',
+    );
+    expect(screen.queryByText('AI assessment')).toBeNull();
+  });
+
+  it('applies only the suggestions the user ticks', async () => {
+    let applied: unknown;
+    useHandlers(
+      ...githubOnly(),
+      http.get(api('/integrations/analysis'), () =>
+        HttpResponse.json([
+          {
+            id: 'an-1',
+            created_at: ANALYSIS.created_at,
+            provider: 'openai',
+            model: 'm',
+            sources_used: ['github'],
+          },
+        ]),
+      ),
+      http.get(api('/integrations/analysis/an-1'), () => HttpResponse.json(ANALYSIS)),
+      http.post(api('/integrations/analysis/an-1/apply-to-profile'), async ({ request }) => {
+        applied = await request.json();
+        return HttpResponse.json({ applied: { skills: 1 }, skipped: [], profile: {} });
+      }),
+    );
+    renderApp('/connections');
+    const user = userEvent.setup();
+    const apply = await screen.findByRole('button', { name: 'Apply selected to my profile' });
+    expect(apply).toBeDisabled();
+    await user.click(screen.getByLabelText('Python (technical)'));
+    await user.click(apply);
+    expect(await screen.findByText('Profile updated')).toBeInTheDocument();
+    expect(applied).toEqual({
+      mode: 'merge',
+      overwrite_existing: false,
+      skills: [{ name: 'Python', category: 'technical', level: null }],
+    });
+  });
+
+  it('confirms before deleting an analysis', async () => {
+    let removed = 0;
+    useHandlers(
+      ...githubOnly(),
+      http.get(api('/integrations/analysis'), () =>
+        HttpResponse.json([
+          {
+            id: 'an-1',
+            created_at: ANALYSIS.created_at,
+            provider: 'openai',
+            model: 'm',
+            sources_used: ['github'],
+          },
+        ]),
+      ),
+      http.get(api('/integrations/analysis/an-1'), () => HttpResponse.json(ANALYSIS)),
+      http.delete(api('/integrations/analysis/an-1'), () => {
+        removed += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderApp('/connections');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Delete this analysis' }));
+    const dialog = screen.getByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(removed).toBe(0);
+    await user.click(screen.getByRole('button', { name: 'Delete this analysis' }));
+    await user.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete' }),
     );
     await waitFor(() => expect(removed).toBe(1));
   });

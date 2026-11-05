@@ -70,7 +70,7 @@ Labelled form controls with `aria-invalid`/`aria-describedby` errors, a skip-to-
 
 ## Testing
 
-95 tests in 9 files (Vitest + Testing Library + MSW): authentication flows and the HTTP client (refresh single-flight, expiry, error mapping), each screen (loading, empty, error and success states, validation, confirmations, request bodies), the interview interactions (follow-ups, skip, unavailable/failed evaluations, injection notice, conflicts) and **four end-to-end journeys** that drive the whole app against a stateful in-memory API (sign-up through an AI interview and report; the same with no AI; session expiry; session restore).
+100 tests in 9 files (Vitest + Testing Library + MSW): authentication flows and the HTTP client (refresh single-flight, expiry, error mapping), each screen (loading, empty, error and success states, validation, confirmations, request bodies), the interview interactions (follow-ups, skip, unavailable/failed evaluations, injection notice, conflicts) and **four end-to-end journeys** that drive the whole app against a stateful in-memory API (sign-up through an AI interview and report; the same with no AI; session expiry; session restore).
 
 Honest limits: the journeys run in jsdom, not a real browser (no Playwright/Cypress browser tests were added, as that needs a browser download); responsive layouts were checked only through Tailwind classes and a desktop screenshot of the built app, not on real devices; the multipart upload cannot complete under jsdom's XHR with MSW, so the two upload-UI tests stub the transport; the real upload and the whole API layer were instead checked once against a live backend (see the development log).
 
@@ -78,6 +78,7 @@ Honest limits: the journeys run in jsdom, not a real browser (no Playwright/Cypr
 
 * The refresh token is in `localStorage` (see above).
 * No password reset, e-mail verification, account deletion or profile photo screens: the backend does not offer them yet.
-* The integration-analysis endpoints (`/integrations/analysis`) and the standalone resume-to-job comparison options (`resume_id`, `include`, custom weights) are not exposed in the UI; matches use all available evidence with default weights.
+* Integration analysis (Connections page) analyses all connected sources with an optional CV; choosing a subset (`include`) is not exposed. The standalone resume-to-job comparison options (`resume_id`, `include`, custom weights) are also not exposed; matches use all available evidence with default weights.
+* Integration analysis was tested only against a mocked API: no real AI provider was available, so real model output has not been seen in the UI.
 * Recharts 2 is used (the 3.x migration is a separate task); the production bundle is a single ~370 kB chunk (no route-level code splitting yet).
 * Interview answers are plain text; voice is a later phase.
