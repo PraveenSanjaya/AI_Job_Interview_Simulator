@@ -414,7 +414,7 @@ describe('candidate journeys', () => {
       // 5. practise for this job
       await user.click(screen.getByRole('link', { name: 'Practise for this job' }));
       await screen.findByRole('heading', { name: 'New interview' });
-      expect(screen.getByLabelText('Target job (optional)')).toHaveValue('j1');
+      await waitFor(() => expect(screen.getByLabelText('Target job (optional)')).toHaveValue('j1'));
       await user.click(screen.getByRole('button', { name: 'Create interview' }));
       await user.click(await screen.findByRole('button', { name: 'Start interview' }));
       expect(await screen.findByTestId('question-text')).toHaveTextContent(

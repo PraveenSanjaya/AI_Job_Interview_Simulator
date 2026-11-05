@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { RouteBoundary } from '@/components/RouteBoundary';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 import { cn } from '@/components/ui';
@@ -99,7 +100,9 @@ export function AppShell() {
         </header>
         {open && <div className="border-b border-slate-200 bg-white lg:hidden">{nav}</div>}
         <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
-          <Outlet />
+          <RouteBoundary>
+            <Outlet />
+          </RouteBoundary>
         </main>
       </div>
     </div>
