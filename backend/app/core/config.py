@@ -98,6 +98,10 @@ class Settings(BaseSettings):
     # Cap for every non-upload request body (JSON documents).
     max_json_body_bytes: int = Field(default=1024 * 1024, ge=16 * 1024, le=10 * 1024 * 1024)
 
+    # How often the background retry of file removal after account deletion runs (seconds).
+    # 0 turns the in-process loop off; ``python -m app.cleanup`` can then run it from cron.
+    file_cleanup_interval_seconds: int = Field(default=300, ge=0)
+
     frontend_url: str = "http://localhost:5173"
     # Extra browser origins allowed to call the API (JSON list). ``frontend_url`` is always allowed.
     cors_allowed_origins: list[str] = Field(default_factory=list)

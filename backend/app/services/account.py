@@ -2,13 +2,15 @@
 
 import asyncio
 import logging
+from datetime import UTC, datetime
 
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ForbiddenError
 from app.core.passwords import verify_password
-from app.models import User
+from app.models import PendingFileDeletion, User
+from app.services.file_cleanup import backoff_after
 from app.storage.base import StorageBackend, StorageError
 
 logger = logging.getLogger(__name__)
@@ -44,7 +46,14 @@ class AccountService:
             raise ForbiddenError("The password is incorrect", code="incorrect_password")
 
         user_id = user.id
+        now = datetime.now(UTC)
+        pending = PendingFileDeletion(
+            storage_namespace=user_id.hex, next_attempt_at=now, attempts=0
+        )
         try:
+            # The to-do record is part of the same transaction as the deletion, so either
+            # both happen or neither does: the intent to clean up cannot be lost.
+            self._session.add(pending)
             await self._session.execute(delete(User).where(User.id == user_id))
             await self._session.commit()
         except Exception:
@@ -54,9 +63,16 @@ class AccountService:
         try:
             await self._storage.delete_namespace(user_id)
         except StorageError:
+            # Keep the record: the sweeper (app.services.file_cleanup) retries with backoff.
+            pending.attempts = 1
+            pending.last_attempt_at = now
+            pending.next_attempt_at = now + backoff_after(1)
+            await self._session.commit()
             logger.error(
-                "Account deleted but some stored files could not be removed",
+                "Account deleted but some stored files could not be removed; will retry",
                 extra={"storage_namespace": user_id.hex},
             )
             return False
+        await self._session.delete(pending)
+        await self._session.commit()
         return True

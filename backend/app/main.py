@@ -1,5 +1,7 @@
 """FastAPI application entry point."""
 
+import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -26,6 +28,7 @@ from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.session import create_db_engine, create_session_factory
 from app.integrations.github.client import GitHubRestClient
 from app.integrations.portfolio.safe_fetch import SafeFetcher
+from app.services.file_cleanup import cleanup_loop
 from app.storage import create_storage
 
 API_V1_PREFIX = "/api/v1"
@@ -35,7 +38,18 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    interval = app.state.file_cleanup_interval
+    cleanup_task: asyncio.Task[None] | None = None
+    if interval > 0 and app.state.session_factory is not None:
+        # Files of deleted accounts that could not be removed at the time are retried here.
+        cleanup_task = asyncio.create_task(
+            cleanup_loop(app.state.session_factory, app.state.storage, interval)
+        )
     yield
+    if cleanup_task is not None:
+        cleanup_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await cleanup_task
     await app.state.portfolio_fetcher.aclose()
     await close_redis_client(app.state.redis)
     if app.state.engine is not None:
@@ -65,6 +79,7 @@ def create_app() -> FastAPI:
         app.state.engine = None
         app.state.session_factory = None
     app.state.storage = create_storage(settings)
+    app.state.file_cleanup_interval = settings.file_cleanup_interval_seconds
     app.state.llm_provider = create_llm_provider(settings)
     app.state.portfolio_fetcher = SafeFetcher(
         timeout_seconds=settings.integration_timeout_seconds,

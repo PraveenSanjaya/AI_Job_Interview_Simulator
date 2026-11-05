@@ -128,7 +128,8 @@ async def test_deleting_an_account_removes_all_of_its_data_and_only_its_data(
     doomed = await populate(app, client, "doomed@example.com")
     counts_with_both = await table_counts(session)
     # The scenario really exercised every table (nothing was silently skipped).
-    empty = [table for table, n in counts_with_both.items() if n == 0]
+    # pending_file_deletions is only filled when file removal fails (tested separately).
+    empty = [t for t, n in counts_with_both.items() if n == 0 and t != "pending_file_deletions"]
     assert empty == [], f"populate() leaves these tables empty, so deletion is untested: {empty}"
     assert len(stored_files(tmp_path / "storage")) == 4
 

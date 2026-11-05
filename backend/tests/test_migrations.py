@@ -38,6 +38,7 @@ EXPECTED_TABLES = {
     "interview_answers",
     "interview_evaluations",
     "interview_reports",
+    "pending_file_deletions",
 }
 
 

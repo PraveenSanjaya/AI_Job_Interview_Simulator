@@ -1,6 +1,7 @@
 """Import every model so that ``Base.metadata`` is complete (used by Alembic)."""
 
 from app.models.base import Base
+from app.models.cleanup import PendingFileDeletion
 from app.models.integration import IntegrationAnalysis, IntegrationSource
 from app.models.interview import (
     InterviewAnswer,
@@ -35,6 +36,7 @@ __all__ = [
     "JobAnalysis",
     "JobDescription",
     "JobMatch",
+    "PendingFileDeletion",
     "Project",
     "RefreshToken",
     "Resume",
