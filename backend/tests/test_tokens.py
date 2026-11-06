@@ -129,7 +129,12 @@ def test_production_requires_a_strong_secret() -> None:
     for bad in (None, "short", "replace_with_secure_secret"):
         with pytest.raises(ValidationError):
             Settings(_env_file=None, app_env="production", jwt_secret_key=bad)
-    ok = Settings(_env_file=None, app_env="production", jwt_secret_key="x" * 40)
+    ok = Settings(
+        _env_file=None,
+        app_env="production",
+        jwt_secret_key="x" * 40,
+        frontend_url="https://app.example.com",
+    )
     assert ok.jwt_secret_is_ephemeral is False
 
 

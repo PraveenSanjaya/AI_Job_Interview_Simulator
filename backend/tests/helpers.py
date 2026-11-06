@@ -37,7 +37,18 @@ async def register_and_login(
     assert created.status_code == 202, created.text
     response = await login(client, email, password)
     assert response.status_code == 200, response.text
+    return session_tokens(response)
+
+
+def session_tokens(response: httpx.Response) -> dict[str, Any]:
+    """The access token from the body plus the refresh token from its HttpOnly cookie
+    (the body never contains it). Tests use this to drive the legacy body path and to
+    inspect the cookie."""
+    assert "refresh_token" not in response.json()
     tokens: dict[str, Any] = response.json()
+    cookie = response.cookies.get("refresh_token")
+    assert cookie, "the refresh cookie was not set"
+    tokens["refresh_token"] = cookie
     return tokens
 
 

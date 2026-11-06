@@ -106,6 +106,17 @@ class Settings(BaseSettings):
     # 0 turns the in-process loop off; ``python -m app.cleanup`` can then run it from cron.
     file_cleanup_interval_seconds: int = Field(default=300, ge=0)
 
+    # Session cookies (see app.core.cookies). The refresh token is only ever sent as an
+    # HttpOnly cookie. ``cookie_secure`` defaults to on everywhere except development/testing
+    # (plain http://localhost); in production it cannot be switched off.
+    cookie_secure: bool | None = None
+    refresh_cookie_name: str = "refresh_token"
+    csrf_cookie_name: str = "csrf_token"
+    # Migration aid: accept a refresh token sent in the JSON body, so people who were signed in
+    # before cookies existed (token in localStorage) are not logged out. Remove once the
+    # refresh-token lifetime has passed since the cookie release (default 7 days).
+    allow_legacy_refresh_body: bool = True
+
     frontend_url: str = "http://localhost:5173"
     # Extra browser origins allowed to call the API (JSON list). ``frontend_url`` is always allowed.
     cors_allowed_origins: list[str] = Field(default_factory=list)
@@ -152,6 +163,26 @@ class Settings(BaseSettings):
             if value.startswith(plain):
                 return async_prefix + value[len(plain) :]
         return value
+
+    @property
+    def refresh_cookie_secure(self) -> bool:
+        if self.cookie_secure is not None:
+            return self.cookie_secure
+        return self.app_env == "production"
+
+    @model_validator(mode="after")
+    def _production_cookie_settings(self) -> Self:
+        if self.app_env == "production":
+            if self.cookie_secure is False:
+                raise ValueError("COOKIE_SECURE cannot be disabled in production")
+            origins = [self.frontend_url, *self.cors_allowed_origins]
+            if any(o.strip() == "*" for o in origins):
+                raise ValueError("Wildcard CORS origins are not allowed in production")
+            if not all(o.startswith("https://") for o in origins if o):
+                raise ValueError(
+                    "FRONTEND_URL and CORS_ALLOWED_ORIGINS must use https in production"
+                )
+        return self
 
     @model_validator(mode="after")
     def _ensure_jwt_secret(self) -> Self:

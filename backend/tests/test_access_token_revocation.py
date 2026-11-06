@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.core.tokens import create_access_token, decode_access_token
 from app.models import RefreshToken, User
-from tests.helpers import bearer, login, register_and_login
+from tests.helpers import bearer, login, register_and_login, session_tokens
 
 pytestmark = pytest.mark.anyio
 
@@ -39,7 +39,7 @@ async def test_logging_out_one_session_leaves_the_users_other_sessions_alone(
     client: httpx.AsyncClient,
 ) -> None:
     first = await register_and_login(client)
-    second = (await login(client)).json()  # a second device
+    second = session_tokens(await login(client))  # a second device
     await client.post("/api/v1/auth/logout", json={"refresh_token": first["refresh_token"]})
 
     assert (await me(client, first)).status_code == 401
@@ -50,9 +50,9 @@ async def test_refreshing_keeps_the_session_alive_and_the_new_token_works(
     client: httpx.AsyncClient,
 ) -> None:
     old = await register_and_login(client)
-    new = (
+    new = session_tokens(
         await client.post("/api/v1/auth/refresh", json={"refresh_token": old["refresh_token"]})
-    ).json()
+    )
     assert (await me(client, new)).status_code == 200
     # Rotation does not end the session, so the previous short-lived token still works
     # until it expires (this is what keeps parallel in-flight requests from failing).
@@ -63,9 +63,9 @@ async def test_logout_after_a_refresh_ends_every_token_of_the_session(
     client: httpx.AsyncClient,
 ) -> None:
     old = await register_and_login(client)
-    new = (
+    new = session_tokens(
         await client.post("/api/v1/auth/refresh", json={"refresh_token": old["refresh_token"]})
-    ).json()
+    )
     await client.post("/api/v1/auth/logout", json={"refresh_token": new["refresh_token"]})
     assert (await me(client, old)).status_code == 401
     assert (await me(client, new)).status_code == 401
@@ -75,9 +75,9 @@ async def test_detected_refresh_token_reuse_also_ends_the_access_tokens(
     client: httpx.AsyncClient,
 ) -> None:
     first = await register_and_login(client)
-    second = (
+    second = session_tokens(
         await client.post("/api/v1/auth/refresh", json={"refresh_token": first["refresh_token"]})
-    ).json()
+    )
     replay = await client.post(
         "/api/v1/auth/refresh", json={"refresh_token": first["refresh_token"]}
     )

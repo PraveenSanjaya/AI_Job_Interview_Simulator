@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.db.session import create_session_factory
 from app.models import RefreshToken
-from tests.helpers import register_and_login
+from tests.helpers import register_and_login, session_tokens
 
 pytestmark = pytest.mark.anyio
 
@@ -69,7 +69,7 @@ async def test_loser_of_a_race_cannot_keep_a_session_alive(
 
     # The winner's token is revoked by the reuse detection (reuse revokes the family),
     # or - if the winner committed after the loser's revocation - still valid once.
-    follow_up = await refresh(concurrent_client, winner.json()["refresh_token"])
+    follow_up = await refresh(concurrent_client, session_tokens(winner)["refresh_token"])
     assert follow_up.status_code in (200, 401)
     rows = await stored_tokens(concurrent_engine)
     assert sum(1 for r in rows if r.revoked_at is None) <= 1
@@ -89,7 +89,7 @@ async def test_concurrent_logins_each_get_independent_sessions(
         )
     )
     assert [r.status_code for r in responses] == [200] * 4
-    refresh_tokens = {r.json()["refresh_token"] for r in responses}
+    refresh_tokens = {session_tokens(r)["refresh_token"] for r in responses}
     assert len(refresh_tokens) == 4
     rows = await stored_tokens(concurrent_engine)
     assert len({r.family_id for r in rows}) == 5  # 1 initial login + 4 concurrent ones

@@ -124,12 +124,14 @@ async def test_login_returns_token_pair_and_stores_only_a_hash(
     body = response.json()
     assert body["token_type"] == "bearer"
     assert body["expires_in"] == 30 * 60
-    assert body["access_token"] and body["refresh_token"]
+    assert body["access_token"]
+    assert "refresh_token" not in body  # only ever delivered in the HttpOnly cookie
+    refresh_token = response.cookies["refresh_token"]
 
     stored = (await session.execute(select(RefreshToken))).scalar_one()
-    assert stored.token_hash == hash_refresh_token(body["refresh_token"])
-    assert stored.token_hash != body["refresh_token"]
-    assert body["refresh_token"] not in stored.token_hash
+    assert stored.token_hash == hash_refresh_token(refresh_token)
+    assert stored.token_hash != refresh_token
+    assert refresh_token not in stored.token_hash
     assert stored.revoked_at is None
 
 

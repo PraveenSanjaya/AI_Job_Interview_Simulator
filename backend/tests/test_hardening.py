@@ -89,6 +89,7 @@ def test_api_documentation_is_published_in_development_only(
         get_settings.cache_clear()
         monkeypatch.setenv("APP_ENV", env)
         monkeypatch.setenv("JWT_SECRET_KEY", "p" * 40)
+        monkeypatch.setenv("FRONTEND_URL", "https://app.example.com")
         try:
             app = create_app()
             return len(

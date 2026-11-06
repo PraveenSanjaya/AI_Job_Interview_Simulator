@@ -82,7 +82,7 @@ class ServiceUnavailableError(AppError):
     code = "service_unavailable"
 
 
-def _error_response(
+def error_response(
     request: Request,
     status_code: int,
     code: str,
@@ -102,14 +102,14 @@ def _error_response(
 
 async def _handle_app_error(request: Request, exc: Exception) -> JSONResponse:
     exc = cast(AppError, exc)
-    return _error_response(
+    return error_response(
         request, exc.status_code, exc.code, exc.message, extra_headers=exc.headers
     )
 
 
 async def _handle_http_exception(request: Request, exc: Exception) -> JSONResponse:
     exc = cast(StarletteHTTPException, exc)
-    return _error_response(request, exc.status_code, "http_error", str(exc.detail))
+    return error_response(request, exc.status_code, "http_error", str(exc.detail))
 
 
 async def _handle_validation_error(request: Request, exc: Exception) -> JSONResponse:
@@ -118,7 +118,7 @@ async def _handle_validation_error(request: Request, exc: Exception) -> JSONResp
         {"location": [str(part) for part in err["loc"]], "message": err["msg"], "type": err["type"]}
         for err in exc.errors()
     ]
-    return _error_response(
+    return error_response(
         request,
         422,
         "validation_error",
@@ -129,7 +129,7 @@ async def _handle_validation_error(request: Request, exc: Exception) -> JSONResp
 
 async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
     logger.error("Unhandled exception", exc_info=exc)
-    return _error_response(
+    return error_response(
         request,
         status.HTTP_500_INTERNAL_SERVER_ERROR,
         "internal_error",

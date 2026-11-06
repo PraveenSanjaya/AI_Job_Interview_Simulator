@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.tokens import hash_refresh_token
 from app.models import RefreshToken, User
 from app.repositories.refresh_tokens import RefreshTokenRepository
-from tests.helpers import DEFAULT_PASSWORD, login, register, register_and_login
+from tests.helpers import DEFAULT_PASSWORD, login, register, register_and_login, session_tokens
 
 pytestmark = pytest.mark.anyio
 
@@ -31,7 +31,7 @@ async def test_refresh_rotates_the_token(client: httpx.AsyncClient, session: Asy
     first = await register_and_login(client)
     response = await refresh(client, first["refresh_token"])
     assert response.status_code == 200
-    second = response.json()
+    second = session_tokens(response)
     assert second["refresh_token"] != first["refresh_token"]
     assert second["access_token"] != first["access_token"]
 
@@ -47,14 +47,14 @@ async def test_rotated_refresh_token_can_be_chained(client: httpx.AsyncClient) -
     for _ in range(3):
         response = await refresh(client, tokens["refresh_token"])
         assert response.status_code == 200
-        tokens = response.json()
+        tokens = session_tokens(response)
 
 
 async def test_reusing_a_rotated_token_is_rejected_and_revokes_the_family(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     first = await register_and_login(client)
-    second = (await refresh(client, first["refresh_token"])).json()
+    second = session_tokens(await refresh(client, first["refresh_token"]))
 
     replay = await refresh(client, first["refresh_token"])  # attacker replays the old token
     assert replay.status_code == 401
@@ -69,7 +69,13 @@ async def test_unknown_and_malformed_refresh_tokens_are_rejected(
     client: httpx.AsyncClient,
 ) -> None:
     assert (await refresh(client, "does-not-exist")).status_code == 401
-    assert (await client.post("/api/v1/auth/refresh", json={})).status_code == 422
+    # With no body the request relies on the cookie, so it must pass the CSRF checks first.
+    assert (await client.post("/api/v1/auth/refresh", json={})).status_code == 403
+    csrf = {"Origin": "http://localhost:5173", "X-CSRF-Token": "t"}
+    client.cookies.set("csrf_token", "t")
+    empty = await client.post("/api/v1/auth/refresh", json={}, headers=csrf)
+    assert empty.status_code == 401  # no refresh cookie
+    assert empty.json()["error"]["code"] == "invalid_refresh_token"
     assert (
         await client.post("/api/v1/auth/refresh", json={"refresh_token": ""})
     ).status_code == 422
@@ -112,15 +118,15 @@ async def test_logout_revokes_descendant_tokens_of_the_session(
     client: httpx.AsyncClient,
 ) -> None:
     first = await register_and_login(client)
-    second = (await refresh(client, first["refresh_token"])).json()
+    second = session_tokens(await refresh(client, first["refresh_token"]))
     assert (await logout(client, second["refresh_token"])).status_code == 204
     assert (await refresh(client, second["refresh_token"])).status_code == 401
 
 
 async def test_logout_only_ends_the_current_session(client: httpx.AsyncClient) -> None:
     await register(client)
-    laptop = (await login(client)).json()
-    phone = (await login(client)).json()
+    laptop = session_tokens(await login(client))
+    phone = session_tokens(await login(client))
     await logout(client, laptop["refresh_token"])
     assert (await refresh(client, laptop["refresh_token"])).status_code == 401
     assert (await refresh(client, phone["refresh_token"])).status_code == 200

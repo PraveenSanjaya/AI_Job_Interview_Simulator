@@ -144,8 +144,8 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware, api_prefix=API_V1_PREFIX)
     app.add_middleware(RequestContextMiddleware)
     # Outermost, so preflights and even error responses carry the CORS headers. Only the
-    # configured browser origins are allowed; credentials (cookies) are not used: the API
-    # authenticates with a bearer token in the Authorization header.
+    # configured browser origins are allowed; credentials (cookies) go only to these
+    # explicit origins and only the refresh session uses them (otherwise: bearer token).
     origins = list(
         dict.fromkeys(
             o.rstrip("/") for o in [settings.frontend_url, *settings.cors_allowed_origins] if o
@@ -155,9 +155,9 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=origins,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
         expose_headers=["X-Request-ID", "Retry-After"],
-        allow_credentials=False,
+        allow_credentials=True,
         max_age=600,
     )
     app.include_router(health.router)

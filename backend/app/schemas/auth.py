@@ -58,7 +58,10 @@ class RegistrationAccepted(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str = Field(min_length=1, max_length=512)
+    """Optional body. The refresh token normally travels in the HttpOnly cookie; a token in the
+    body is accepted only for the legacy migration (``ALLOW_LEGACY_REFRESH_BODY``)."""
+
+    refresh_token: str | None = Field(default=None, min_length=1, max_length=512)
 
 
 class LogoutRequest(RefreshRequest):
@@ -78,8 +81,22 @@ class UserResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
+    """Issued tokens as the service returns them. INTERNAL: never serialised to clients,
+    because ``refresh_token`` must only ever leave the server inside an HttpOnly cookie."""
+
     access_token: str
     refresh_token: str
+    token_type: str = "bearer"  # noqa: S105
+    expires_in: int = Field(description="Access token lifetime in seconds")
+
+    def public(self) -> "AccessTokenResponse":
+        return AccessTokenResponse(access_token=self.access_token, expires_in=self.expires_in)
+
+
+class AccessTokenResponse(BaseModel):
+    """What the API returns on sign-in and refresh. The refresh token is in a cookie."""
+
+    access_token: str
     token_type: str = "bearer"  # noqa: S105
     expires_in: int = Field(description="Access token lifetime in seconds")
 

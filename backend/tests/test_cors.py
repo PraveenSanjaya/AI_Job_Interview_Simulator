@@ -21,7 +21,8 @@ async def test_preflight_from_the_frontend_is_allowed(client: httpx.AsyncClient)
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == ORIGIN
     assert "PUT" in response.headers["access-control-allow-methods"]
-    assert "access-control-allow-credentials" not in response.headers
+    assert response.headers["access-control-allow-credentials"] == "true"
+    assert "x-csrf-token" in response.headers["access-control-allow-headers"].lower()
 
 
 async def test_other_origins_get_no_cors_headers(client: httpx.AsyncClient) -> None:
