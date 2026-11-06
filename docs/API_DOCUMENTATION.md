@@ -46,18 +46,31 @@ Trade-offs: a user who re-registers an existing email with a different password 
 Body: `email`, `password`. Returns:
 
 ```json
-{"access_token": "…", "refresh_token": "…", "token_type": "bearer", "expires_in": 1800}
+{"access_token": "…", "token_type": "bearer", "expires_in": 1800}
 ```
+
+The refresh token is **never** in the body. It is set as an `HttpOnly` cookie (`refresh_token`, `SameSite=Strict`, `Path=/api/v1/auth`, `Max-Age` = the refresh lifetime, `Secure` outside development) together with a script-readable `csrf_token` cookie. See "Cookie sessions" below.
 
 Unknown email, wrong password and disabled account all return the same `401 invalid_credentials` response, and an unknown email still performs a full password verification so the outcomes cannot be told apart by timing.
 
 ### POST `/auth/refresh` → 200
 
-Body: `refresh_token`. Returns a new token pair and **revokes the presented token** (rotation). Refresh tokens are single-use. Presenting an already-used token revokes the whole token family (every token descended from that login) and returns `401 invalid_refresh_token`, so a stolen token that is replayed also logs out the thief and the victim.
+No body. Reads the refresh token from the `refresh_token` cookie and requires the CSRF proof described under "Cookie sessions" (`403 csrf_failed` otherwise). Returns a new access token, sets a **rotated refresh cookie** and **revokes the presented token**. A refresh that fails with `401` also clears both cookies, so a dead credential is not retried. (A legacy `{"refresh_token": …}` body is honoured only while `ALLOW_LEGACY_REFRESH_BODY=true`.) Refresh tokens are single-use. Presenting an already-used token revokes the whole token family (every token descended from that login) and returns `401 invalid_refresh_token`, so a stolen token that is replayed also logs out the thief and the victim.
 
 ### POST `/auth/logout` → 204
 
-Body: `refresh_token`. Revokes that login session (its entire token family). Always returns 204, including for unknown or already-revoked tokens, so it does not reveal token validity. Other sessions of the same user remain valid. Access tokens are bound to the login session that issued them (a `sid` claim), so the access tokens of the session you log out of stop working **immediately** (`401 session_ended`); the same happens when refresh-token reuse is detected and when the account is deleted. Checking this costs one indexed query per authenticated request. Access tokens issued before this binding existed carry no `sid` and remain valid until they expire (at most 30 minutes), so deploying the change signs nobody out. **Removal plan:** this compatibility exists only for `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` after the deploy; once that time has passed no valid token without `sid` can exist, and the `session_id is None` branch in `get_current_user` (and the test that covers it) can be deleted to make the `sid` claim mandatory.
+No body (cookie, with the same CSRF proof; legacy body as above). Revokes that login session (its entire token family). Always returns 204, including for unknown or already-revoked tokens, so it does not reveal token validity. Other sessions of the same user remain valid. Access tokens are bound to the login session that issued them (a `sid` claim), so the access tokens of the session you log out of stop working **immediately** (`401 session_ended`); the same happens when refresh-token reuse is detected and when the account is deleted. Checking this costs one indexed query per authenticated request. Access tokens issued before this binding existed carry no `sid` and remain valid until they expire (at most 30 minutes), so deploying the change signs nobody out. **Removal plan:** this compatibility exists only for `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` after the deploy; once that time has passed no valid token without `sid` can exist, and the `session_id is None` branch in `get_current_user` (and the test that covers it) can be deleted to make the `sid` claim mandatory.
+
+Both cookies are cleared in the response. `POST /auth/delete-account` clears them too.
+
+### Cookie sessions
+
+* **Cookies.** `refresh_token`: `HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`, host-only (no `Domain`), `Max-Age` = `JWT_REFRESH_TOKEN_EXPIRE_DAYS`, `Secure` when `COOKIE_SECURE` (default: on everywhere except `APP_ENV=development|testing`; cannot be turned off in production). `csrf_token`: same lifetime and `SameSite`, `Path=/`, **not** `HttpOnly` (the front end must read it).
+* **CSRF protection for `/auth/refresh` and `/auth/logout` when the cookie is used**, all required: (1) `SameSite=Strict`; (2) an `Origin` header (or `Referer` when `Origin` is absent) equal to `FRONTEND_URL` or one of `CORS_ALLOWED_ORIGINS`; a request with neither is refused; (3) an `X-CSRF-Token` header equal to the `csrf_token` cookie (constant-time comparison). Failures return `403 csrf_failed` and consume nothing.
+* **Endpoints that use only `Authorization: Bearer …`** are not CSRF-prone, because a browser never attaches that header by itself.
+* **CORS.** `Access-Control-Allow-Credentials: true` is sent only for the explicit origin list; the list can never be `*` (production refuses to start with a wildcard). `X-CSRF-Token` is an allowed request header.
+* **Legacy compatibility (`ALLOW_LEGACY_REFRESH_BODY`, default `true`).** *Why:* people who were signed in before cookies existed hold a refresh token in `localStorage`; the flag lets an older client keep refreshing (which migrates them to a cookie) instead of being signed out. *Security implications:* a body token is itself the secret and is not sent automatically by browsers, so this path skips the CSRF checks; it is also exactly the credential cookies were introduced to protect, so it keeps the old exposure alive for as long as it is enabled. With the flag off a body token never authenticates and does not bypass CSRF (it is ignored and the cookie path applies). *Migration:* the current front end never sends a body token and deletes the old `localStorage` entry on load, so its users simply sign in once. *Disable:* set `ALLOW_LEGACY_REFRESH_BODY=false`. *Remove the code:* once `JWT_REFRESH_TOKEN_EXPIRE_DAYS` (7 by default) have passed since every client was updated, no legacy token can still be valid; delete the flag, `_session_token`'s body branch and the legacy tests.
+* **Rollback.** Redeploying the previous backend and front end restores body-token behaviour, because the database format is unchanged; users signed in through cookies just sign in again. Rolling back only the front end works while `ALLOW_LEGACY_REFRESH_BODY` is still true, but the old front end cannot read tokens from the new API (the body no longer contains `refresh_token`), so roll both back together.
 
 ### GET `/auth/me` → 200
 

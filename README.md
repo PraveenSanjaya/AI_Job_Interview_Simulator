@@ -96,7 +96,10 @@ Settings are read from environment variables or a `.env` file (see `.env.example
 | `PORTFOLIO_MAX_PAGES` | `5` | Pages fetched per portfolio (the supplied page plus same-host pages) |
 | `INTERVIEW_DEFAULT_FOLLOWUPS`, `INTERVIEW_MAX_FOLLOWUPS`, `INTERVIEW_MAX_QUESTIONS` | `2`, `3`, `30` | Follow-ups per main question (default and ceiling) and maximum interview length |
 | `INTERVIEW_IDLE_MINUTES`, `INTERVIEW_CREATED_EXPIRY_HOURS` | `120`, `72` | A running interview idle this long becomes `interrupted`; an unstarted one expires |
-| `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | `http://localhost:5173`, `[]` | Browser origins allowed to call the API (the frontend URL is always allowed; extra origins as a JSON list). No cookies or credentials are involved |
+| `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | `http://localhost:5173`, `[]` | Browser origins allowed to call the API (the frontend URL is always allowed; extra origins as a JSON list). Cookies carry the refresh session, so these must be **explicit https origins in production** (no `*`) |
+| `COOKIE_SECURE` | on except in development/testing | `Secure` flag of the session cookies; cannot be disabled in production |
+| `REFRESH_COOKIE_NAME`, `CSRF_COOKIE_NAME` | `refresh_token`, `csrf_token` | Cookie names |
+| `ALLOW_LEGACY_REFRESH_BODY` | `true` | Temporary: accept a refresh token in the request body from pre-cookie clients. Set to `false` once the front end is updated; see `docs/API_DOCUMENTATION.md` ("Cookie sessions") |
 | `INTERVIEW_SCORING` | unset | Optional JSON overrides of the interview scoring rules; validated at startup |
 | `MATCH_WEIGHTS` | unset | Optional JSON overrides of the job-match scoring weights, e.g. `{"required_skills": 0.5}`; validated at startup |
 

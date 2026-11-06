@@ -1,7 +1,9 @@
 # Design: moving the refresh token out of `localStorage`
 
-**Status: proposal, not implemented.** Implementing it changes authentication for every
-client, so it should be reviewed first.
+**Status: implemented (phases A to C) in the backend (`app/core/cookies.py`, `api/v1/auth.py`) and
+the front end (`lib/session.ts`, `lib/authSync.ts`, `lib/http.ts`).** Sections 1 and 2 describe the
+state *before* the change. What is not decided is the production hosting arrangement (3.6). Real
+browser behaviour of `SameSite`/`Secure` is not verified; only HTTP-level tests exist.
 
 ## 1. Current state
 
@@ -134,3 +136,23 @@ storage; session restore after reload via the cookie; a real-browser check of `S
 Adopt it, in the three phases above, once the hosting decision in 3.6 is made. Until then the
 mitigations that exist today (no injection sinks, rotation with reuse detection, session-bound access
 tokens that end on logout, 7-day maximum lifetime) remain the protection.
+
+
+## 6. Testing and deploying the cookie session
+
+**Locally.** Run the backend (`uvicorn app.main:app`) and `npm run dev`. Browse to
+`http://localhost:5173`: the Vite proxy makes `/api` same-origin, `FRONTEND_URL` already matches the
+`Origin` the browser sends, and `Secure` is off in development so cookies work over plain http. In the
+browser's developer tools, *Application → Cookies* should show `refresh_token` (HttpOnly ticked, path
+`/api/v1/auth`) and `csrf_token`, and *Local/Session Storage* should hold no token. Automated checks:
+`pytest tests/test_cookie_sessions.py` and `npx vitest run src/test/cookieSession.test.tsx`.
+
+**Production settings (all required).** `APP_ENV=production`; `FRONTEND_URL` and every entry of
+`CORS_ALLOWED_ORIGINS` explicit `https://` origins (no `*`, no http); `COOKIE_SECURE` unset or `true`;
+front end and API on the same site (for example `app.<your-domain>` and `api.<your-domain>`, or one
+origin behind a reverse proxy) served over HTTPS; the front end built with `VITE_API_BASE_URL` pointing
+at the API. The application refuses to start if these are violated. The domains are not decided yet,
+so none are named here. `ALLOW_LEGACY_REFRESH_BODY=false` once every client is updated.
+
+**Rollback.** See `docs/API_DOCUMENTATION.md` ("Cookie sessions"): redeploy the previous backend and
+front end together; the database is unchanged.

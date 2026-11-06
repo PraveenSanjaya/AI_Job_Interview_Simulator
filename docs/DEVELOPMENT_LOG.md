@@ -101,6 +101,10 @@ One row per completed and verified feature. Hashes and results are copied from t
 | Phase 8 follow-up: retryable, lease-claimed cleanup of files after account deletion (migration 0006) | Completed on SQLite; PostgreSQL variants skipped | 18 new backend tests, 2 skipped | 57ca4a7 | PraveenSanjaya |
 | Phase 8 follow-up: strict Redis failure mode, tests and docs for multi-instance fallback | Completed against a fake only | 10 new backend tests | aa40032 | PraveenSanjaya |
 | Phase 8 follow-up: refresh-token cookie design (proposal only) | Documented, not implemented | N/A | 05a40cf | PraveenSanjaya |
+| Phase 8 follow-up: refresh token in an HttpOnly cookie with CSRF and origin checks (backend) | Completed | 1138 passed, 12 skipped (full suite) | 9d5a2c9 | PraveenSanjaya |
+| Phase 8 follow-up: backend cookie-session tests | Completed | 35 new (33 run, 2 PostgreSQL-only skipped) | efda2ba | PraveenSanjaya |
+| Phase 8 follow-up: front end uses the cookie; access token in memory; cross-tab refresh lock and sign-out | Completed | see next row | b205bb4 | PraveenSanjaya |
+| Phase 8 follow-up: front end cookie-session tests | Completed | 122 passed (15 new); ESLint, tsc, Prettier, build clean | afc9b04 | PraveenSanjaya |
 
 ## Notes
 
@@ -135,3 +139,7 @@ One row per completed and verified feature. Hashes and results are copied from t
 - Refresh-token storage: design only in `docs/SECURITY_DESIGN_REFRESH_TOKEN.md`; it depends on a same-site hosting decision and has not been implemented.
 - Still unverified: PostgreSQL (migrations 0001-0006, concurrency tests), Docker, a real Redis server and the Lua scripts, a real browser, real AI providers.
 - Git (follow-up): no push, pull, fetch or sync was issued.
+- Cookie sessions (this follow-up): the refresh token is an `HttpOnly; SameSite=Strict; Path=/api/v1/auth` cookie, never in a JSON body; `/auth/refresh` and `/auth/logout` need an allowed Origin/Referer and a matching `X-CSRF-Token`. Verification: backend full run **1138 passed, 12 skipped** (the skips need PostgreSQL); Ruff, Ruff format, strict mypy and `git diff --check` clean; frontend 122 tests, ESLint, `tsc`, Prettier and production build clean. The earlier one-test timeout in a frontend run happened while the backend suite was using the CPU; it passed on an idle machine.
+- Cookie sessions, **not verified**: real-browser `SameSite`/`Secure` behaviour, Web Locks and `BroadcastChannel` across real tabs (jsdom and mocked API only), PostgreSQL concurrent refresh, and any real deployment domain. The front end and API must be on the same site; the production domains are undecided, so no domain was invented. `ALLOW_LEGACY_REFRESH_BODY` stays `true` by default as a temporary migration aid; plan to disable and remove it is in `docs/API_DOCUMENTATION.md` ("Cookie sessions").
+- Recovery: the previous session stopped when C: filled up; the uncommitted work was intact (all files parsed, no truncation) and was completed, not recreated. Two older tests were stale rather than the code being wrong: `/auth/refresh` with an empty body now needs CSRF proof (403) before reaching the missing-cookie check (401), and the production settings test needed an https `FRONTEND_URL`.
+- Git (cookie follow-up): no push, pull, fetch or sync was issued.
