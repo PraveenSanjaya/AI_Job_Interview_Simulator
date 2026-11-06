@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { App } from '@/App';
 import { AuthProvider } from '@/auth/AuthContext';
 import { API_BASE_URL } from '@/lib/config';
-import { tokens } from '@/lib/tokens';
+import { setSessionCookie } from './cookies';
 import { server } from './server';
 
 /** MSW pattern matching an API path whatever the test origin is. */
@@ -41,12 +41,11 @@ export function errorBody(code: string, message: string, status: number, extra: 
 
 /** Pretend a previous visit left a valid session: refresh succeeds and /auth/me works. */
 export function signedInHandlers(): HttpHandler[] {
-  tokens.set('old-access', 'refresh-1');
+  setSessionCookie();
   return [
     http.post(api('/auth/refresh'), () =>
       HttpResponse.json({
         access_token: 'access-1',
-        refresh_token: 'refresh-2',
         token_type: 'bearer',
         expires_in: 1800,
       }),

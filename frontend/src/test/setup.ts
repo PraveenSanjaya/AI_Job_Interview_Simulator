@@ -3,6 +3,7 @@ import { cleanup, configure } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { tokens } from '@/lib/tokens';
 import { server } from './server';
+import { clearSessionCookie } from './cookies';
 
 // Pages are loaded on demand; the first import of each can take a while to transform.
 configure({ asyncUtilTimeout: 5000 });
@@ -21,5 +22,7 @@ afterEach(() => {
   server.resetHandlers();
   tokens.clear();
   window.localStorage.clear();
+  window.sessionStorage.clear();
+  clearSessionCookie();
 });
 afterAll(() => server.close());

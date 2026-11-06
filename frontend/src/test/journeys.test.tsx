@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { Interview, Match, Question } from '@/api/types';
 import { JOB_ANALYSIS, MATCH, PROFILE } from './fixtures';
+import { setSessionCookie } from './cookies';
 import { api, errorBody, renderApp, useHandlers, USER } from './utils';
 
 const PASSWORD = 'S3cure-passphrase-42';
@@ -99,7 +100,6 @@ function fakeBackend({ ai }: { ai: boolean }) {
       state.registered
         ? HttpResponse.json({
             access_token: 'a1',
-            refresh_token: 'r1',
             token_type: 'bearer',
             expires_in: 1800,
           })
@@ -109,7 +109,6 @@ function fakeBackend({ ai }: { ai: boolean }) {
     http.post(api('/auth/refresh'), () =>
       HttpResponse.json({
         access_token: 'a2',
-        refresh_token: 'r2',
         token_type: 'bearer',
         expires_in: 1800,
       }),
@@ -524,7 +523,7 @@ describe('candidate journeys', () => {
 
   it('a returning visitor is taken straight back into the app after a reload', async () => {
     const { handlers } = fakeBackend({ ai: false });
-    window.localStorage.setItem('ajis.refresh_token', 'r1');
+    setSessionCookie();
     useHandlers(...handlers);
     renderApp('/jobs');
     expect(await screen.findByText('No jobs saved yet')).toBeInTheDocument();

@@ -52,7 +52,7 @@ describe('account deletion', () => {
       screen.getByText(/All of your data and uploaded files were removed/),
     ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
-    expect(tokens.getRefresh()).toBeNull();
+    expect(tokens.getAccess()).toBeNull();
   });
 
   it('reports honestly when some stored files could not be removed', async () => {
@@ -80,6 +80,6 @@ describe('account deletion', () => {
     await user.click(screen.getByRole('button', { name: 'Delete my account permanently' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Nothing was deleted');
     expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument();
-    expect(tokens.getRefresh()).not.toBeNull();
+    expect(tokens.getAccess()).not.toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { tokens } from '@/lib/tokens';
+import { setSessionCookie } from './cookies';
 import {
   api,
   emptyAccountDataHandlers,
@@ -14,7 +15,6 @@ import {
 
 const PAIR = {
   access_token: 'access-1',
-  refresh_token: 'refresh-1',
   token_type: 'bearer',
   expires_in: 1800,
 };
@@ -25,7 +25,7 @@ describe('authentication flows', () => {
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
   });
 
-  it('signs in, stores the refresh token and shows the app', async () => {
+  it('signs in, keeps the access token in memory and shows the app', async () => {
     useHandlers(
       http.post(api('/auth/login'), async ({ request }) => {
         expect(await request.json()).toEqual({
@@ -46,7 +46,6 @@ describe('authentication flows', () => {
     await user.type(screen.getByLabelText('Password'), 'S3cure-passphrase-42');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('button', { name: /sign out/i })).toBeInTheDocument();
-    expect(tokens.getRefresh()).toBe('refresh-1');
     expect(tokens.getAccess()).toBe('access-1');
   });
 
@@ -64,7 +63,7 @@ describe('authentication flows', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'The email or password is incorrect.',
     );
-    expect(tokens.getRefresh()).toBeNull();
+    expect(tokens.getAccess()).toBeNull();
   });
 
   it('validates the login form before calling the server', async () => {
@@ -139,11 +138,11 @@ describe('authentication flows', () => {
     useHandlers(...emptyAccountHandlers());
     renderApp('/');
     expect(await screen.findByRole('button', { name: /sign out/i })).toBeInTheDocument();
-    expect(tokens.getRefresh()).toBe('refresh-2'); // the rotated token replaced the old one
+    expect(tokens.getAccess()).toBe('access-1');
   });
 
   it('falls back to the login page when the stored session is no longer valid', async () => {
-    tokens.set('x', 'revoked');
+    setSessionCookie('stale');
     useHandlers(
       http.post(api('/auth/refresh'), () =>
         errorBody('invalid_refresh_token', 'Invalid refresh token', 401),
@@ -151,15 +150,17 @@ describe('authentication flows', () => {
     );
     renderApp('/');
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
-    expect(tokens.getRefresh()).toBeNull();
+    expect(tokens.getAccess()).toBeNull();
   });
 
   it('signs out: revokes the session on the server and clears local state', async () => {
-    let revoked: unknown;
+    let csrf: string | null = null;
+    let bodyText = 'unset';
     useHandlers(
       ...emptyAccountHandlers(),
       http.post(api('/auth/logout'), async ({ request }) => {
-        revoked = await request.json();
+        csrf = request.headers.get('x-csrf-token');
+        bodyText = await request.text();
         return new HttpResponse(null, { status: 204 });
       }),
     );
@@ -167,8 +168,8 @@ describe('authentication flows', () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: /sign out/i }));
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
-    expect(revoked).toEqual({ refresh_token: 'refresh-2' });
-    expect(tokens.getRefresh()).toBeNull();
+    expect(csrf).toBe('csrf-1'); // the CSRF cookie is echoed in the header
+    expect(bodyText).toBe(''); // the refresh token is in the HttpOnly cookie, not the body
     expect(tokens.getAccess()).toBeNull();
   });
 
@@ -179,7 +180,7 @@ describe('authentication flows', () => {
     );
     renderApp('/');
     await userEvent.setup().click(await screen.findByRole('button', { name: /sign out/i }));
-    await waitFor(() => expect(tokens.getRefresh()).toBeNull());
+    await waitFor(() => expect(tokens.getAccess()).toBeNull());
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
   });
 

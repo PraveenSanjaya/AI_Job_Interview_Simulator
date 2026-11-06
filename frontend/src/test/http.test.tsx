@@ -11,7 +11,7 @@ import { api, errorBody, useHandlers } from './utils';
 
 describe('HTTP client', () => {
   it('sends the bearer token', async () => {
-    tokens.set('abc', 'r1');
+    tokens.set('abc');
     useHandlers(
       mswHttp.get(api('/ping'), ({ request }) =>
         HttpResponse.json({ auth: request.headers.get('authorization') }),
@@ -21,7 +21,7 @@ describe('HTTP client', () => {
   });
 
   it('refreshes an expired access token once and retries the request', async () => {
-    tokens.set('expired', 'r1');
+    tokens.set('expired');
     let refreshes = 0;
     useHandlers(
       mswHttp.get(api('/data'), ({ request }) =>
@@ -33,7 +33,6 @@ describe('HTTP client', () => {
         refreshes += 1;
         return HttpResponse.json({
           access_token: 'fresh',
-          refresh_token: 'r2',
           token_type: 'bearer',
           expires_in: 1800,
         });
@@ -43,11 +42,11 @@ describe('HTTP client', () => {
     expect(a.data).toEqual({ ok: true });
     expect(b.data).toEqual({ ok: true });
     expect(refreshes).toBe(1); // single-flight: refresh tokens are single-use
-    expect(tokens.getRefresh()).toBe('r2');
+    expect(tokens.getAccess()).toBe('fresh');
   });
 
   it('ends the session when the refresh fails', async () => {
-    tokens.set('expired', 'r1');
+    tokens.set('expired');
     const expired = vi.fn();
     setSessionExpiredHandler(expired);
     useHandlers(
@@ -56,7 +55,7 @@ describe('HTTP client', () => {
     );
     await expect(http.get('/data')).rejects.toMatchObject({ status: 401 });
     expect(expired).toHaveBeenCalledOnce();
-    expect(tokens.getRefresh()).toBeNull();
+    expect(tokens.getAccess()).toBeNull();
     setSessionExpiredHandler(() => undefined);
   });
 
@@ -69,7 +68,7 @@ describe('HTTP client', () => {
         return HttpResponse.json({});
       }),
     );
-    tokens.set('a', 'r');
+    tokens.set('a');
     await expect(http.post('/auth/login', {})).rejects.toMatchObject({
       code: 'invalid_credentials',
     });
