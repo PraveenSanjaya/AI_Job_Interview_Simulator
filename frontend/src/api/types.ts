@@ -1,9 +1,9 @@
 /** Shapes of the backend API (see docs/API_DOCUMENTATION.md). Dates are ISO strings. */
 
 // ------------------------------------------------------------------ auth
-export interface TokenPair {
+/** Sign-in and refresh response. The refresh token is an HttpOnly cookie, never in the body. */
+export interface AccessToken {
   access_token: string;
-  refresh_token: string;
   token_type: string;
   expires_in: number;
 }

@@ -10,7 +10,9 @@ import {
 } from 'react';
 import { authApi } from '@/api/endpoints';
 import type { User } from '@/api/types';
+import { broadcastAuth, onAuthBroadcast } from '@/lib/authSync';
 import { refreshSession, setSessionExpiredHandler } from '@/lib/http';
+import { hasSessionHint, purgeLegacyRefreshToken } from '@/lib/session';
 import { tokens } from '@/lib/tokens';
 
 type Status = 'loading' | 'authenticated' | 'anonymous';
@@ -46,42 +48,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [queryClient],
   );
 
-  // Expired or revoked sessions found by the HTTP layer sign the user out.
+  // Expired or revoked sessions found by the HTTP layer sign the user out (in every tab).
   useEffect(() => {
-    setSessionExpiredHandler(() => signOutLocally(true));
+    setSessionExpiredHandler(() => {
+      signOutLocally(true);
+      broadcastAuth('logout');
+    });
   }, [signOutLocally]);
 
-  // Restore a session after a reload: refresh token -> new tokens -> current user.
-  useEffect(() => {
-    let cancelled = false;
-    async function restore() {
-      if (!tokens.getRefresh()) {
+  // Restore a session after a reload: refresh cookie -> new access token -> current user.
+  // The refresh token itself is HttpOnly; the CSRF cookie only hints that a session exists.
+  const restore = useCallback(
+    async (isCancelled: () => boolean) => {
+      purgeLegacyRefreshToken();
+      if (!hasSessionHint()) {
         setStatus('anonymous');
         return;
       }
       try {
         await refreshSession();
         const me = await authApi.me();
-        if (!cancelled) {
+        if (!isCancelled()) {
           setUser(me);
           setStatus('authenticated');
         }
       } catch {
-        if (!cancelled) signOutLocally(false);
+        if (!isCancelled()) signOutLocally(false);
       }
-    }
-    void restore();
+    },
+    [signOutLocally],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void restore(() => cancelled);
     return () => {
       cancelled = true;
     };
-  }, [signOutLocally]);
+  }, [restore]);
+
+  // Another tab signed out (drop everything here) or in (pick up the shared session).
+  // Messages carry no tokens.
+  useEffect(
+    () =>
+      onAuthBroadcast((event) => {
+        if (event === 'logout') signOutLocally(false);
+        else void restore(() => false);
+      }),
+    [restore, signOutLocally],
+  );
 
   const login = useCallback(async (email: string, password: string) => {
-    const pair = await authApi.login({ email, password });
-    tokens.set(pair.access_token, pair.refresh_token);
+    const issued = await authApi.login({ email, password });
+    tokens.set(issued.access_token);
     setUser(await authApi.me());
     setSessionExpired(false);
     setStatus('authenticated');
+    broadcastAuth('login');
   }, []);
 
   const register = useCallback(
@@ -93,19 +116,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    const refresh = tokens.getRefresh();
     try {
-      if (refresh) await authApi.logout(refresh);
+      await authApi.logout();
     } catch {
       /* the local session is ended regardless */
     }
     signOutLocally(false);
+    broadcastAuth('logout');
   }, [signOutLocally]);
 
   const deleteAccount = useCallback(
     async (password: string) => {
       const result = await authApi.deleteAccount(password);
       signOutLocally(false);
+      broadcastAuth('logout');
       return result.stored_files_removed;
     },
     [signOutLocally],

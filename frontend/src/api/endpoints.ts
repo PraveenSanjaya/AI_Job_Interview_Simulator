@@ -25,7 +25,7 @@ import type {
   Question,
   Resume,
   ResumeAnalysis,
-  TokenPair,
+  AccessToken,
   User,
 } from './types';
 
@@ -35,9 +35,8 @@ export const authApi = {
   register: (body: { email: string; password: string; full_name: string }) =>
     http.post<{ message: string }>('/auth/register', body).then(data),
   login: (body: { email: string; password: string }) =>
-    http.post<TokenPair>('/auth/login', body).then(data),
-  logout: (refresh_token: string) =>
-    http.post('/auth/logout', { refresh_token }).then(() => undefined),
+    http.post<AccessToken>('/auth/login', body).then(data),
+  logout: () => http.post('/auth/logout').then(() => undefined),
   me: () => http.get<User>('/auth/me').then(data),
   deleteAccount: (password: string) =>
     http
